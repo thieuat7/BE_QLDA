@@ -19,7 +19,7 @@ install_dependencies:
     - Write-Host "Installing dependencies..." -ForegroundColor Cyan
     - node --version
     - npm --version
-    - npm ci --prefer-offline
+    - npm install
     - Write-Host "Dependencies installed successfully!" -ForegroundColor Green
   artifacts:
     paths:
