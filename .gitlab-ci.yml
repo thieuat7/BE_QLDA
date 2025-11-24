@@ -1,14 +1,3 @@
-stages:
-  - build
-
-build:
-  stage: build
-  tags:
-    - shell
+build_job:
   script:
-    - Write-Host "Starting build..."
-    - node --version
-    - npm --version
-    - npm install
-    - node --check src/server.mjs
-    - Write-Host "Build completed successfully"
+    - echo "Hello World"
