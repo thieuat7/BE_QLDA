@@ -1,8 +1,14 @@
-default:
+stages:
+  - build
+
+build:
+  stage: build
   tags:
     - shell
-
-test:
   script:
-    - echo "Hello from GitLab Runner"
+    - Write-Host "Starting build process..."
     - node --version
+    - npm --version
+    - npm install
+    - node --check src/server.mjs
+    - Write-Host "Build completed successfully!"
