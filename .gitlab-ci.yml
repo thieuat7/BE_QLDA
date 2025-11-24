@@ -1,16 +1,15 @@
-# Backend Node.js .gitlab-ci.yml
-image: node:18  # Dùng Node version 18 (hoặc 20)
+# Backend Node.js .gitlab-ci.yml (Shell Runner - Windows)
 
 stages:
   - build
 
 build_check:
   stage: build
+  tags:
+    - shell  # Chỉ định dùng shell runner
   script:
-    - echo "Đang cài đặt thư viện..."
+    - echo "Dang cai dat thu vien..."
     - npm install
-    - echo "Kiểm tra lỗi cú pháp..."
-    # Nếu có test thì chạy: npm test
-    # Nếu không, chỉ cần node chạy thử file chính để xem có crash không
-    - node --check src/server.mjs  # --check để kiểm tra syntax
-    - echo "Backend Node.js ổn áp!"
+    - echo "Kiem tra loi cu phap..."
+    - node --check src/server.mjs
+    - echo "Backend Node.js ok!"
