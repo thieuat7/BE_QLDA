@@ -1,15 +1,11 @@
-# Backend Node.js .gitlab-ci.yml (Shell Runner - Windows)
-
 stages:
   - build
 
 build_check:
   stage: build
-  tags:
-    - shell  # Chỉ định dùng shell runner
   script:
-    - echo "Dang cai dat thu vien..."
+    - node --version
+    - npm --version
     - npm install
-    - echo "Kiem tra loi cu phap..."
     - node --check src/server.mjs
-    - echo "Backend Node.js ok!"
+    - echo "Build success!"
