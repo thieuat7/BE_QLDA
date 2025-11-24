@@ -1,10 +1,12 @@
 stages:
   - build
 
-build_check:
+build:
   stage: build
   script:
+    - echo "Starting build..."
     - node --version
     - npm --version
     - npm install
     - node --check src/server.mjs
+    - echo "Build completed successfully"
