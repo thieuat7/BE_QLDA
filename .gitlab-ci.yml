@@ -1,3 +1,8 @@
-build_job:
+default:
+  tags:
+    - shell
+
+test:
   script:
-    - echo "Hello World"
+    - echo "Hello from GitLab Runner"
+    - node --version
