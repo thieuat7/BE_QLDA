@@ -1,0 +1,16 @@
+# Backend Node.js .gitlab-ci.yml
+image: node:18  # Dùng Node version 18 (hoặc 20)
+
+stages:
+  - build
+
+build_check:
+  stage: build
+  script:
+    - echo "Đang cài đặt thư viện..."
+    - npm install
+    - echo "Kiểm tra lỗi cú pháp..."
+    # Nếu có test thì chạy: npm test
+    # Nếu không, chỉ cần node chạy thử file chính để xem có crash không
+    - node -c server.js  # -c là check syntax, không chạy server thật
+    - echo "Backend Node.js ổn áp!"
