@@ -6,9 +6,9 @@ build:
   tags:
     - shell
   script:
-    - echo "Starting build..."
+    - Write-Host "Starting build..."
     - node --version
     - npm --version
     - npm install
     - node --check src/server.mjs
-    - echo "Build completed successfully"
+    - Write-Host "Build completed successfully"
