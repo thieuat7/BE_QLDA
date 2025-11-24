@@ -3,6 +3,8 @@ stages:
 
 build:
   stage: build
+  tags:
+    - shell
   script:
     - echo "Starting build..."
     - node --version
