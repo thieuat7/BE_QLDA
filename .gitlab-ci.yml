@@ -12,5 +12,5 @@ build_check:
     - echo "Kiểm tra lỗi cú pháp..."
     # Nếu có test thì chạy: npm test
     # Nếu không, chỉ cần node chạy thử file chính để xem có crash không
-    - node -c server.js  # -c là check syntax, không chạy server thật
+    - node --check src/server.mjs  # --check để kiểm tra syntax
     - echo "Backend Node.js ổn áp!"
