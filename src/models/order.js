@@ -18,4 +18,5 @@ module.exports = (sequelize, DataTypes) => {
         status: DataTypes.INTEGER
     }, { sequelize, modelName: 'Order' });
     return Order;
+
 };
