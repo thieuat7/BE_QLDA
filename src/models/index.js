@@ -1,43 +1,101 @@
-'use strict';
+import { Sequelize, DataTypes } from 'sequelize';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const fs = require('fs');
-const path = require('path');
-const Sequelize = require('sequelize');
-const process = require('process');
-const basename = path.basename(__filename);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const env = process.env.NODE_ENV || 'development';
-const config = require(__dirname + '/../config/config.json')[env];
+const configPath = join(__dirname, '../config/config.json');
+const configData = JSON.parse(readFileSync(configPath, 'utf8'));
+const config = configData[env];
+
+// Initialize Sequelize
+const sequelize = new Sequelize(config.database, config.username, config.password, config);
+
+// Define models inline (simplified approach)
 const db = {};
 
-let sequelize;
-if (config.use_env_variable) {
-  sequelize = new Sequelize(process.env[config.use_env_variable], config);
-} else {
-  sequelize = new Sequelize(config.database, config.username, config.password, config);
+// Test connection
+try {
+  await sequelize.authenticate();
+  console.log('✓ Database connection established successfully');
+} catch (error) {
+  console.error('✗ Unable to connect to database:', error.message);
 }
-
-fs
-  .readdirSync(__dirname)
-  .filter(file => {
-    return (
-      file.indexOf('.') !== 0 &&
-      file !== basename &&
-      file.slice(-3) === '.js' &&
-      file.indexOf('.test.js') === -1
-    );
-  })
-  .forEach(file => {
-    const model = require(path.join(__dirname, file))(sequelize, Sequelize.DataTypes);
-    db[model.name] = model;
-  });
-
-Object.keys(db).forEach(modelName => {
-  if (db[modelName].associate) {
-    db[modelName].associate(db);
-  }
-});
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
-module.exports = db;
+// Models
+db.Product = sequelize.define('Product', {
+  title: DataTypes.STRING,
+  alias: DataTypes.STRING,
+  productCode: DataTypes.STRING,
+  description: DataTypes.TEXT,
+  detail: DataTypes.TEXT,
+  image: DataTypes.STRING,
+  originalPrice: DataTypes.DECIMAL(18, 2),
+  price: DataTypes.DECIMAL(18, 2),
+  priceSale: DataTypes.DECIMAL(18, 2),
+  quantity: DataTypes.INTEGER,
+  productCategoryId: DataTypes.INTEGER,
+  isActive: DataTypes.BOOLEAN,
+  isHome: DataTypes.BOOLEAN,
+  isHot: DataTypes.BOOLEAN
+});
+
+db.ProductCategory = sequelize.define('ProductCategory', {
+  title: DataTypes.STRING,
+  alias: DataTypes.STRING,
+  icon: DataTypes.STRING
+});
+
+db.ProductImage = sequelize.define('ProductImage', {
+  productId: DataTypes.INTEGER,
+  image: DataTypes.STRING,
+  isDefault: DataTypes.BOOLEAN
+});
+
+db.Category = sequelize.define('Category', {
+  title: DataTypes.STRING,
+  alias: DataTypes.STRING,
+  position: DataTypes.INTEGER,
+  isActive: DataTypes.BOOLEAN
+});
+
+db.User = sequelize.define('User', {
+  id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+  fullName: DataTypes.STRING,
+  phone: DataTypes.STRING,
+  email: DataTypes.STRING,
+  userName: DataTypes.STRING,
+  passwordHash: DataTypes.STRING
+});
+
+db.Order = sequelize.define('Order', {
+  code: DataTypes.STRING,
+  customerName: DataTypes.STRING,
+  phone: DataTypes.STRING,
+  address: DataTypes.STRING,
+  email: DataTypes.STRING,
+  totalAmount: DataTypes.DECIMAL(18, 2),
+  quantity: DataTypes.INTEGER,
+  typePayment: DataTypes.INTEGER,
+  status: DataTypes.INTEGER
+});
+
+db.OrderDetail = sequelize.define('OrderDetail', {
+  orderId: DataTypes.INTEGER,
+  productId: DataTypes.INTEGER,
+  price: DataTypes.DECIMAL(18, 2),
+  quantity: DataTypes.INTEGER
+});
+
+// Associations
+db.Product.belongsTo(db.ProductCategory, { foreignKey: 'productCategoryId', as: 'category' });
+db.Product.hasMany(db.ProductImage, { foreignKey: 'productId', as: 'images' });
+db.ProductImage.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
+
+export default db;

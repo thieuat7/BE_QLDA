@@ -1,12 +1,26 @@
 import express from 'express';
-const router = express.Router();
-import HomePage from '../controller/HomePageController.js';
-import LoginPage from '../controller/LoginController.js';
+import authRouter from './authRouter.js';
 
 const InitRouter = (app) => {
-    router.get('/', HomePage);
-    router.get('/login', LoginPage);
-    return app.use('/', router);
+    // API routes
+    app.use('/api/auth', authRouter);
+
+    // Health check endpoint
+    app.get('/health', (req, res) => {
+        res.json({
+            status: 'OK',
+            message: 'Backend API is running',
+            timestamp: new Date().toISOString()
+        });
+    });
+
+    // 404 handler
+    app.use((req, res) => {
+        res.status(404).json({
+            success: false,
+            message: 'API endpoint not found'
+        });
+    });
 }
 
 export default InitRouter;
