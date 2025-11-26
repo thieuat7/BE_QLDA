@@ -155,7 +155,8 @@ export const login = async (req, res) => {
             {
                 id: user.id,
                 email: user.email,
-                userName: user.userName
+                userName: user.userName,
+                role: user.role
             },
             JWT_SECRET,
             { expiresIn: JWT_EXPIRES_IN }
@@ -168,6 +169,7 @@ export const login = async (req, res) => {
             email: user.email,
             fullName: user.fullName,
             phone: user.phone,
+            role: user.role,
             createdAt: user.createdAt
         };
 
