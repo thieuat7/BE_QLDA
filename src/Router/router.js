@@ -2,12 +2,14 @@ import express from 'express';
 import authRouter from './authRouter.js';
 import userRouter from './userRouter.js';
 import categoryRouter from './categoryRouter.js';
+import productRouter from './productRouter.js';
 
 const InitRouter = (app) => {
     // API routes
     app.use('/api/auth', authRouter);
     app.use('/api/users', userRouter);
     app.use('/api/categories', categoryRouter);
+    app.use('/api/products', productRouter);
 
     // Health check endpoint
     app.get('/health', (req, res) => {
