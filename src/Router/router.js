@@ -3,6 +3,7 @@ import authRouter from './authRouter.js';
 import userRouter from './userRouter.js';
 import categoryRouter from './categoryRouter.js';
 import productRouter from './productRouter.js';
+import cartRouter from './cartRouter.js';
 
 const InitRouter = (app) => {
     // API routes
@@ -10,6 +11,7 @@ const InitRouter = (app) => {
     app.use('/api/users', userRouter);
     app.use('/api/categories', categoryRouter);
     app.use('/api/products', productRouter);
+    app.use('/api/cart', cartRouter);
 
     // Health check endpoint
     app.get('/health', (req, res) => {

@@ -93,9 +93,26 @@ db.OrderDetail = sequelize.define('OrderDetail', {
   quantity: DataTypes.INTEGER
 });
 
+db.Cart = sequelize.define('Cart', {
+  userId: DataTypes.STRING(128)
+});
+
+db.CartItem = sequelize.define('CartItem', {
+  cartId: DataTypes.INTEGER,
+  productId: DataTypes.INTEGER,
+  quantity: DataTypes.INTEGER,
+  price: DataTypes.DECIMAL(18, 2)
+});
+
 // Associations
 db.Product.belongsTo(db.ProductCategory, { foreignKey: 'productCategoryId', as: 'category' });
 db.Product.hasMany(db.ProductImage, { foreignKey: 'productId', as: 'images' });
 db.ProductImage.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
+
+// Cart associations
+db.Cart.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
+db.Cart.hasMany(db.CartItem, { foreignKey: 'cartId', as: 'items' });
+db.CartItem.belongsTo(db.Cart, { foreignKey: 'cartId', as: 'cart' });
+db.CartItem.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
 export default db;
