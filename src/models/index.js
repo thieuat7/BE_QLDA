@@ -76,6 +76,7 @@ db.User = sequelize.define('User', {
 
 db.Order = sequelize.define('Order', {
   code: DataTypes.STRING,
+  userId: DataTypes.STRING(128),
   customerName: DataTypes.STRING,
   phone: DataTypes.STRING,
   address: DataTypes.STRING,
@@ -114,5 +115,11 @@ db.Cart.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
 db.Cart.hasMany(db.CartItem, { foreignKey: 'cartId', as: 'items' });
 db.CartItem.belongsTo(db.Cart, { foreignKey: 'cartId', as: 'cart' });
 db.CartItem.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
+
+// Order associations
+db.Order.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
+db.Order.hasMany(db.OrderDetail, { foreignKey: 'orderId', as: 'details' });
+db.OrderDetail.belongsTo(db.Order, { foreignKey: 'orderId', as: 'order' });
+db.OrderDetail.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
 export default db;
