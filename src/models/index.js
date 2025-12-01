@@ -84,7 +84,11 @@ db.Order = sequelize.define('Order', {
   totalAmount: DataTypes.DECIMAL(18, 2),
   quantity: DataTypes.INTEGER,
   typePayment: DataTypes.INTEGER,
-  status: DataTypes.INTEGER
+  status: DataTypes.INTEGER,
+  discountId: DataTypes.INTEGER,
+  discountValue: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  paymentStatus: { type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded'), defaultValue: 'pending' },
+  transactionId: DataTypes.STRING(100)
 });
 
 db.OrderDetail = sequelize.define('OrderDetail', {
@@ -105,6 +109,20 @@ db.CartItem = sequelize.define('CartItem', {
   price: DataTypes.DECIMAL(18, 2)
 });
 
+db.Discount = sequelize.define('Discount', {
+  code: { type: DataTypes.STRING(50), unique: true, allowNull: false },
+  description: DataTypes.TEXT,
+  type: { type: DataTypes.ENUM('percent', 'amount'), defaultValue: 'percent', allowNull: false },
+  value: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
+  minOrderAmount: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
+  maxDiscount: DataTypes.DECIMAL(10, 2),
+  startDate: { type: DataTypes.DATE, allowNull: false },
+  endDate: { type: DataTypes.DATE, allowNull: false },
+  usageLimit: DataTypes.INTEGER,
+  usedCount: { type: DataTypes.INTEGER, defaultValue: 0 },
+  isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
+});
+
 // Associations
 db.Product.belongsTo(db.ProductCategory, { foreignKey: 'productCategoryId', as: 'category' });
 db.Product.hasMany(db.ProductImage, { foreignKey: 'productId', as: 'images' });
@@ -118,6 +136,7 @@ db.CartItem.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
 // Order associations
 db.Order.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
+db.Order.belongsTo(db.Discount, { foreignKey: 'discountId', as: 'discount' });
 db.Order.hasMany(db.OrderDetail, { foreignKey: 'orderId', as: 'details' });
 db.OrderDetail.belongsTo(db.Order, { foreignKey: 'orderId', as: 'order' });
 db.OrderDetail.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });

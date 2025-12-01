@@ -330,3 +330,178 @@ export const removeFromCart = async (req, res) => {
         });
     }
 };
+
+/**
+ * POST /api/cart/apply-discount
+ * Áp dụng mã giảm giá vào giỏ hàng
+ * Có thể áp dụng cho toàn bộ giỏ hoặc chỉ một số sản phẩm cụ thể
+ */
+export const applyDiscount = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { discountCode, productIds } = req.body; // productIds: array các product ID muốn áp dụng discount
+
+        if (!discountCode) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp mã giảm giá'
+            });
+        }
+
+        // Tìm cart của user
+        const cart = await db.Cart.findOne({
+            where: { userId: userId },
+            include: [
+                {
+                    model: db.CartItem,
+                    as: 'items',
+                    include: [
+                        {
+                            model: db.Product,
+                            as: 'product',
+                            attributes: ['id', 'title', 'image', 'price', 'priceSale', 'quantity']
+                        }
+                    ]
+                }
+            ]
+        });
+
+        if (!cart || cart.items.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Giỏ hàng trống'
+            });
+        }
+
+        // Lọc các item cần áp dụng discount
+        let applicableItems = cart.items;
+        if (productIds && Array.isArray(productIds) && productIds.length > 0) {
+            applicableItems = cart.items.filter(item => productIds.includes(item.productId));
+
+            if (applicableItems.length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Không tìm thấy sản phẩm nào trong giỏ hàng khớp với danh sách đã chọn'
+                });
+            }
+        }
+
+        // Tính tổng tiền của các item được áp dụng discount
+        const subtotal = applicableItems.reduce((sum, item) => {
+            return sum + (parseFloat(item.price) * item.quantity);
+        }, 0);
+
+        // Tính tổng tiền các item không áp dụng discount
+        const remainingItems = cart.items.filter(item =>
+            !applicableItems.some(appItem => appItem.id === item.id)
+        );
+        const remainingAmount = remainingItems.reduce((sum, item) => {
+            return sum + (parseFloat(item.price) * item.quantity);
+        }, 0);
+
+        // Tìm mã giảm giá
+        const discount = await db.Discount.findOne({
+            where: {
+                code: discountCode.toUpperCase(),
+                isActive: true
+            }
+        });
+
+        if (!discount) {
+            return res.status(404).json({
+                success: false,
+                message: 'Mã giảm giá không tồn tại hoặc đã bị vô hiệu hóa'
+            });
+        }
+
+        // Kiểm tra thời hạn
+        const now = new Date();
+        if (now < new Date(discount.startDate) || now > new Date(discount.endDate)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mã giảm giá đã hết hạn hoặc chưa đến thời gian sử dụng'
+            });
+        }
+
+        // Kiểm tra số lượt sử dụng
+        if (discount.usageLimit && discount.usedCount >= discount.usageLimit) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mã giảm giá đã hết lượt sử dụng'
+            });
+        }
+
+        // Kiểm tra giá trị đơn hàng tối thiểu
+        if (discount.minOrderAmount && subtotal < parseFloat(discount.minOrderAmount)) {
+            return res.status(400).json({
+                success: false,
+                message: `Đơn hàng tối thiểu ${discount.minOrderAmount.toLocaleString('vi-VN')} VNĐ để áp dụng mã này`
+            });
+        }
+
+        // Tính số tiền giảm
+        let discountAmount = 0;
+        if (discount.type === 'percent') {
+            discountAmount = (subtotal * parseFloat(discount.value)) / 100;
+            // Áp dụng giảm tối đa nếu có
+            if (discount.maxDiscount && discountAmount > parseFloat(discount.maxDiscount)) {
+                discountAmount = parseFloat(discount.maxDiscount);
+            }
+        } else {
+            // type === 'amount'
+            discountAmount = parseFloat(discount.value);
+        }
+
+        // Tính tổng tiền sau giảm giá (chỉ áp dụng cho các item được chọn)
+        const finalAmountAfterDiscount = Math.max(0, subtotal - discountAmount);
+
+        // Tổng tiền toàn bộ giỏ hàng
+        const totalCartAmount = finalAmountAfterDiscount + remainingAmount;
+
+        return res.status(200).json({
+            success: true,
+            message: productIds && productIds.length > 0
+                ? `Áp dụng mã giảm giá thành công cho ${applicableItems.length} sản phẩm`
+                : 'Áp dụng mã giảm giá thành công cho toàn bộ giỏ hàng',
+            data: {
+                discount: {
+                    id: discount.id,
+                    code: discount.code,
+                    description: discount.description,
+                    type: discount.type,
+                    value: discount.value
+                },
+                applicableItems: applicableItems.map(item => ({
+                    productId: item.productId,
+                    productTitle: item.product.title,
+                    quantity: item.quantity,
+                    price: item.price,
+                    subtotal: parseFloat(item.price) * item.quantity
+                })),
+                remainingItems: remainingItems.map(item => ({
+                    productId: item.productId,
+                    productTitle: item.product.title,
+                    quantity: item.quantity,
+                    price: item.price,
+                    subtotal: parseFloat(item.price) * item.quantity
+                })),
+                calculation: {
+                    applicableSubtotal: subtotal,
+                    discountAmount: discountAmount,
+                    finalAmountAfterDiscount: finalAmountAfterDiscount,
+                    remainingAmount: remainingAmount,
+                    totalCartAmount: totalCartAmount
+                },
+                cart: cart
+            }
+        });
+
+    } catch (error) {
+        console.error('Apply discount error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi áp dụng mã giảm giá',
+            error: error.message
+        });
+    }
+};

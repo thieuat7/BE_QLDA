@@ -10,7 +10,7 @@ export const checkout = async (req, res) => {
 
     try {
         const userId = req.user.id;
-        const { address, phone, customerName, paymentMethod, email } = req.body;
+        const { address, phone, customerName, paymentMethod, email, discountCode } = req.body;
 
         // 1. Validate body
         if (!address || !phone || !customerName) {
@@ -83,12 +83,57 @@ export const checkout = async (req, res) => {
         }
 
         // 4. Tính tổng tiền
-        let totalAmount = 0;
+        let subtotal = 0;
         let totalQuantity = 0;
 
         for (const item of cart.items) {
-            totalAmount += parseFloat(item.price) * item.quantity;
+            subtotal += parseFloat(item.price) * item.quantity;
             totalQuantity += item.quantity;
+        }
+
+        // 4.5. Xử lý mã giảm giá (nếu có)
+        let discount = null;
+        let discountAmount = 0;
+        let finalAmount = subtotal;
+
+        if (discountCode) {
+            // Tìm discount
+            discount = await db.Discount.findOne({
+                where: {
+                    code: discountCode.toUpperCase(),
+                    isActive: true
+                },
+                transaction
+            });
+
+            if (discount) {
+                // Kiểm tra thời hạn
+                const now = new Date();
+                if (now >= new Date(discount.startDate) && now <= new Date(discount.endDate)) {
+                    // Kiểm tra số lượt sử dụng
+                    if (!discount.usageLimit || discount.usedCount < discount.usageLimit) {
+                        // Kiểm tra giá trị đơn hàng tối thiểu
+                        if (!discount.minOrderAmount || subtotal >= parseFloat(discount.minOrderAmount)) {
+                            // Tính số tiền giảm
+                            if (discount.type === 'percent') {
+                                discountAmount = (subtotal * parseFloat(discount.value)) / 100;
+                                // Áp dụng giảm tối đa nếu có
+                                if (discount.maxDiscount && discountAmount > parseFloat(discount.maxDiscount)) {
+                                    discountAmount = parseFloat(discount.maxDiscount);
+                                }
+                            } else {
+                                // type === 'amount'
+                                discountAmount = parseFloat(discount.value);
+                            }
+
+                            finalAmount = Math.max(0, subtotal - discountAmount);
+
+                            // Tăng usedCount
+                            await discount.increment('usedCount', { transaction });
+                        }
+                    }
+                }
+            }
         }
 
         // 5. Tạo mã đơn hàng unique
@@ -102,10 +147,13 @@ export const checkout = async (req, res) => {
             phone: phone,
             address: address,
             email: email || req.user.email,
-            totalAmount: totalAmount,
+            totalAmount: finalAmount,
             quantity: totalQuantity,
             typePayment: paymentMethod || 1, // 1: COD, 2: Online
-            status: 1 // 1: Đang xử lý
+            status: 1, // 1: Đang xử lý
+            discountId: discount ? discount.id : null,
+            discountValue: discountAmount,
+            paymentStatus: paymentMethod === 2 ? 'pending' : 'paid' // COD = paid ngay, Online = pending
         }, { transaction });
 
         // 7. Chuyển các cart_items thành order_items
@@ -161,6 +209,11 @@ export const checkout = async (req, res) => {
                             attributes: ['id', 'title', 'image', 'price']
                         }
                     ]
+                },
+                {
+                    model: db.Discount,
+                    as: 'discount',
+                    attributes: ['id', 'code', 'description', 'type', 'value']
                 }
             ]
         });
@@ -169,7 +222,12 @@ export const checkout = async (req, res) => {
             success: true,
             message: 'Đặt hàng thành công',
             data: {
-                order: orderWithDetails
+                order: orderWithDetails,
+                summary: {
+                    subtotal: subtotal,
+                    discountAmount: discountAmount,
+                    finalAmount: finalAmount
+                }
             }
         });
 

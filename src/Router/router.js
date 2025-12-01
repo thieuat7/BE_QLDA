@@ -5,6 +5,8 @@ import categoryRouter from './categoryRouter.js';
 import productRouter from './productRouter.js';
 import cartRouter from './cartRouter.js';
 import orderRouter from './orderRouter.js';
+import discountRouter from './discountRouter.js';
+import paymentRouter from './paymentRouter.js';
 
 const InitRouter = (app) => {
     // API routes
@@ -14,6 +16,8 @@ const InitRouter = (app) => {
     app.use('/api/products', productRouter);
     app.use('/api/cart', cartRouter);
     app.use('/api/orders', orderRouter);
+    app.use('/api/discounts', discountRouter);
+    app.use('/api/payment', paymentRouter);
 
     // Health check endpoint
     app.get('/health', (req, res) => {
