@@ -294,3 +294,181 @@ export const getOrderById = async (req, res) => {
         });
     }
 };
+
+/**
+ * GET /api/orders (Admin)
+ * Lấy tất cả đơn hàng với filter và phân trang
+ */
+export const getAllOrders = async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+        const status = req.query.status; // Filter theo status
+
+        // Build where clause
+        const whereClause = {};
+        if (status) {
+            whereClause.status = status;
+        }
+
+        const { count, rows: orders } = await db.Order.findAndCountAll({
+            where: whereClause,
+            include: [
+                {
+                    model: db.User,
+                    as: 'user',
+                    attributes: ['id', 'userName', 'email', 'phone']
+                },
+                {
+                    model: db.OrderDetail,
+                    as: 'details',
+                    include: [
+                        {
+                            model: db.Product,
+                            as: 'product',
+                            attributes: ['id', 'title', 'image', 'price']
+                        }
+                    ]
+                }
+            ],
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', 'DESC']]
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách đơn hàng thành công',
+            data: {
+                orders: orders,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(count / limit),
+                    totalOrders: count,
+                    limit: limit
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Get all orders error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy danh sách đơn hàng',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * PUT /api/orders/:id/status (Admin)
+ * Cập nhật trạng thái đơn hàng
+ * Status: 1 = Đang xử lý, 2 = Đang giao, 3 = Đã giao, 4 = Đã hủy
+ */
+export const updateOrderStatus = async (req, res) => {
+    const transaction = await db.sequelize.transaction();
+
+    try {
+        const orderId = req.params.id;
+        const { status } = req.body;
+
+        // Validate status
+        const validStatuses = [1, 2, 3, 4]; // 1: processing, 2: shipping, 3: delivered, 4: cancelled
+        if (!status || !validStatuses.includes(parseInt(status))) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'Trạng thái không hợp lệ. Status phải là: 1 (Đang xử lý), 2 (Đang giao), 3 (Đã giao), 4 (Đã hủy)'
+            });
+        }
+
+        // Tìm order
+        const order = await db.Order.findByPk(orderId, {
+            include: [
+                {
+                    model: db.OrderDetail,
+                    as: 'details'
+                }
+            ],
+            transaction
+        });
+
+        if (!order) {
+            await transaction.rollback();
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy đơn hàng'
+            });
+        }
+
+        // Kiểm tra logic: không thể thay đổi từ trạng thái đã giao/đã hủy
+        if (order.status === 3 || order.status === 4) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: 'Không thể cập nhật trạng thái đơn hàng đã giao hoặc đã hủy'
+            });
+        }
+
+        const oldStatus = order.status;
+        const newStatus = parseInt(status);
+
+        // Nếu status đổi thành 'cancelled' (4), hoàn trả stock
+        if (newStatus === 4 && oldStatus !== 4) {
+            // Hoàn trả số lượng sản phẩm về kho
+            const restoreStockPromises = order.details.map(detail => {
+                return db.Product.increment(
+                    'quantity',
+                    {
+                        by: detail.quantity,
+                        where: { id: detail.productId },
+                        transaction
+                    }
+                );
+            });
+
+            await Promise.all(restoreStockPromises);
+        }
+
+        // Cập nhật status
+        order.status = newStatus;
+        await order.save({ transaction });
+
+        await transaction.commit();
+
+        // Lấy lại order với đầy đủ thông tin
+        const updatedOrder = await db.Order.findByPk(orderId, {
+            include: [
+                {
+                    model: db.OrderDetail,
+                    as: 'details',
+                    include: [
+                        {
+                            model: db.Product,
+                            as: 'product',
+                            attributes: ['id', 'title', 'image', 'price']
+                        }
+                    ]
+                }
+            ]
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật trạng thái đơn hàng thành công',
+            data: {
+                order: updatedOrder
+            }
+        });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Update order status error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi cập nhật trạng thái đơn hàng',
+            error: error.message
+        });
+    }
+};
