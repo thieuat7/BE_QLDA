@@ -7,6 +7,7 @@ import cartRouter from './cartRouter.js';
 import orderRouter from './orderRouter.js';
 import discountRouter from './discountRouter.js';
 import paymentRouter from './paymentRouter.js';
+import statsRouter from './statsRouter.js';
 
 const InitRouter = (app) => {
     // API routes
@@ -18,6 +19,7 @@ const InitRouter = (app) => {
     app.use('/api/orders', orderRouter);
     app.use('/api/discounts', discountRouter);
     app.use('/api/payment', paymentRouter);
+    app.use('/api/stats', statsRouter);
 
     // Health check endpoint
     app.get('/health', (req, res) => {
