@@ -14,7 +14,11 @@ module.exports = (sequelize, DataTypes) => {
         phone: DataTypes.STRING,
         userName: DataTypes.STRING,
         passwordHash: DataTypes.STRING,
-        isAdmin: { type: DataTypes.BOOLEAN, defaultValue: false }
-    }, { sequelize, modelName: 'User' });
+        role: { type: DataTypes.STRING, defaultValue: 'user' }
+    }, {
+        sequelize,
+        modelName: 'User',
+        tableName: 'Users'
+    });
     return User;
 };
