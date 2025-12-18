@@ -68,13 +68,14 @@ export const register = async (req, res) => {
         const saltRounds = 10;
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // 4. Tạo user mới
+        // 4. Tạo user mới với avatar mặc định
         const newUser = await db.User.create({
             userName: username,
             email,
             passwordHash: hashedPassword,
             fullName: fullName || null,
-            phone: phone || null
+            phone: phone || null,
+            avatar: '/Uploads/default-avatar.png' // Avatar mặc định
         });
 
         // 5. Trả về thông tin user (không trả password)
@@ -127,7 +128,16 @@ export const login = async (req, res) => {
 
         // 2. Tìm user trong database bằng email
         const user = await db.User.findOne({
-            where: { email }
+            where: { email },
+            attributes: ['id', 'userName', 'email', 'passwordHash', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+        });
+
+        // Debug: Log để kiểm tra
+        console.log('🔍 User data from DB:', {
+            id: user?.id,
+            email: user?.email,
+            role: user?.role,
+            dataValues: user?.dataValues
         });
 
         if (!user) {
@@ -169,9 +179,12 @@ export const login = async (req, res) => {
             email: user.email,
             fullName: user.fullName,
             phone: user.phone,
-            role: user.role,
+            role: user.role || user.dataValues?.role || 'user', // Fallback để lấy role
             createdAt: user.createdAt
         };
+
+        // Debug log
+        console.log('📦 User response:', userResponse);
 
         return res.status(200).json({
             success: true,
@@ -188,6 +201,265 @@ export const login = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Lỗi server khi đăng nhập',
+            error: error.message
+        });
+    }
+};
+
+// GET /api/auth/me
+export const getCurrentUser = async (req, res) => {
+    try {
+        // req.user được set từ verifyToken middleware
+        const userId = req.user.id;
+
+        const user = await db.User.findByPk(userId, {
+            attributes: { exclude: ['passwordHash'] }
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User không tồn tại'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            user: {
+                id: user.id,
+                username: user.userName,
+                email: user.email,
+                fullName: user.fullName,
+                phone: user.phone,
+                role: user.role,
+                googleId: user.googleId,
+                facebookId: user.facebookId,
+                avatar: user.avatar,
+                createdAt: user.createdAt
+            }
+        });
+
+    } catch (error) {
+        console.error('Get current user error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi lấy thông tin user',
+            error: error.message
+        });
+    }
+};
+
+// PUT /api/auth/update-profile
+export const updateProfile = async (req, res) => {
+    try {
+        const userId = req.user.id; // Từ verifyToken middleware
+        const { userName, phone, email, fullName } = req.body;
+
+        // Validate input
+        if (!userName || !phone) {
+            return res.status(400).json({
+                success: false,
+                message: 'userName và phone là bắt buộc'
+            });
+        }
+
+        // Kiểm tra phone format
+        const phoneRegex = /^[0-9]{10,11}$/;
+        if (!phoneRegex.test(phone)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Số điện thoại không hợp lệ (10-11 số)'
+            });
+        }
+
+        // Validate email nếu có
+        if (email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email không đúng định dạng'
+                });
+            }
+        }
+
+        // Kiểm tra userName đã tồn tại chưa (trừ user hiện tại)
+        const existingUser = await db.User.findOne({
+            where: {
+                userName: userName,
+                id: { [db.Sequelize.Op.ne]: userId }
+            }
+        });
+
+        if (existingUser) {
+            return res.status(409).json({
+                success: false,
+                message: 'Tên đăng nhập đã tồn tại'
+            });
+        }
+
+        // Prepare update data
+        const updateData = {
+            userName,
+            phone
+        };
+
+        // Thêm email và fullName nếu có
+        if (email) {
+            updateData.email = email;
+        }
+        if (fullName) {
+            updateData.fullName = fullName;
+        }
+
+        // Update user
+        await db.User.update(updateData, {
+            where: { id: userId }
+        });
+
+        // Lấy user info mới
+        const updatedUser = await db.User.findByPk(userId, {
+            attributes: { exclude: ['passwordHash'] }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật thông tin thành công',
+            user: {
+                id: updatedUser.id,
+                username: updatedUser.userName,
+                email: updatedUser.email,
+                fullName: updatedUser.fullName,
+                phone: updatedUser.phone,
+                role: updatedUser.role,
+                avatar: updatedUser.avatar
+            }
+        });
+
+    } catch (error) {
+        console.error('Update profile error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi cập nhật thông tin',
+            error: error.message
+        });
+    }
+};
+
+// POST /api/auth/upload-avatar
+export const uploadAvatar = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // Kiểm tra có file không
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng chọn file ảnh'
+            });
+        }
+
+        // URL của ảnh (từ multer)
+        const avatarUrl = `/Uploads/${req.file.filename}`;
+
+        // Update avatar trong database
+        await db.User.update(
+            { avatar: avatarUrl },
+            { where: { id: userId } }
+        );
+
+        // Lấy user info mới
+        const updatedUser = await db.User.findByPk(userId, {
+            attributes: { exclude: ['passwordHash'] }
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Upload avatar thành công',
+            avatar: avatarUrl,
+            user: {
+                id: updatedUser.id,
+                username: updatedUser.userName,
+                email: updatedUser.email,
+                fullName: updatedUser.fullName,
+                phone: updatedUser.phone,
+                avatar: updatedUser.avatar
+            }
+        });
+
+    } catch (error) {
+        console.error('Upload avatar error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi upload avatar',
+            error: error.message
+        });
+    }
+};
+
+// POST /api/auth/change-password
+export const changePassword = async (req, res) => {
+    try {
+        const userId = req.user.id; // Từ verifyToken middleware
+        const { currentPassword, newPassword } = req.body;
+
+        // Validate newPassword
+        if (!newPassword || newPassword.length < 6) {
+            return res.status(400).json({
+                success: false,
+                message: 'Mật khẩu mới phải có ít nhất 6 ký tự'
+            });
+        }
+
+        // Lấy thông tin user hiện tại
+        const user = await db.User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy người dùng'
+            });
+        }
+
+        // Kiểm tra nếu user đã có password (không phải OAuth user lần đầu)
+        if (user.passwordHash) {
+            // User đã có password → phải xác thực currentPassword
+            if (!currentPassword) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Vui lòng nhập mật khẩu hiện tại'
+                });
+            }
+
+            // Verify currentPassword
+            const isPasswordValid = await bcrypt.compare(currentPassword, user.passwordHash);
+            if (!isPasswordValid) {
+                return res.status(401).json({
+                    success: false,
+                    message: 'Mật khẩu hiện tại không đúng'
+                });
+            }
+        }
+        // Nếu user chưa có password (OAuth user) → cho phép đặt password mới mà không cần currentPassword
+
+        // Hash password mới
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        await db.User.update(
+            { passwordHash: hashedPassword },
+            { where: { id: userId } }
+        );
+
+        return res.status(200).json({
+            success: true,
+            message: 'Đổi mật khẩu thành công'
+        });
+
+    } catch (error) {
+        console.error('Change password error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi đổi mật khẩu',
             error: error.message
         });
     }

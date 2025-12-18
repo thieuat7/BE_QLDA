@@ -314,7 +314,7 @@ export const getRecentOrders = async (req, res) => {
                 },
                 {
                     model: db.OrderDetail,
-                    as: 'details',
+                    as: 'OrderDetails',
                     include: [
                         {
                             model: db.Product,

@@ -260,7 +260,7 @@ export const getUserOrders = async (req, res) => {
             include: [
                 {
                     model: db.OrderDetail,
-                    as: 'details',
+                    as: 'OrderDetails',
                     include: [
                         {
                             model: db.Product,
@@ -305,25 +305,42 @@ export const getUserOrders = async (req, res) => {
  */
 export const getOrderById = async (req, res) => {
     try {
-        const userId = req.user.id;
         const orderId = req.params.id;
+        const user = req.user;
+
+        // Build where clause
+        const whereClause = { id: orderId };
+
+        // Nếu không phải admin, chỉ lấy đơn hàng của chính user
+        if (user.role !== 'admin') {
+            whereClause.userId = user.id;
+        }
 
         const order = await db.Order.findOne({
-            where: {
-                id: orderId,
-                userId: userId // Chỉ lấy đơn hàng của chính user
-            },
+            where: whereClause,
             include: [
                 {
+                    model: db.User,
+                    as: 'user',
+                    attributes: ['id', 'userName', 'email', 'phone', 'fullName'],
+                    required: false
+                },
+                {
                     model: db.OrderDetail,
-                    as: 'details',
+                    as: 'OrderDetails',
                     include: [
                         {
                             model: db.Product,
                             as: 'product',
-                            attributes: ['id', 'title', 'image', 'price', 'description']
+                            attributes: ['id', 'title', 'image', 'price', 'productCode', 'description']
                         }
                     ]
+                },
+                {
+                    model: db.Discount,
+                    as: 'discount',
+                    attributes: ['id', 'code', 'description', 'type', 'value'],
+                    required: false
                 }
             ]
         });
@@ -359,15 +376,40 @@ export const getOrderById = async (req, res) => {
  */
 export const getAllOrders = async (req, res) => {
     try {
+        const { Op } = await import('sequelize');
         const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 10;
+        const limit = parseInt(req.query.limit) || 20;
         const offset = (page - 1) * limit;
-        const status = req.query.status; // Filter theo status
+        const status = req.query.status;
+        const paymentStatus = req.query.paymentStatus;
+        const search = req.query.search;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
 
         // Build where clause
         const whereClause = {};
+
         if (status) {
             whereClause.status = status;
+        }
+
+        if (paymentStatus) {
+            whereClause.paymentStatus = paymentStatus;
+        }
+
+        if (search) {
+            whereClause[Op.or] = [
+                { code: { [Op.like]: `%${search}%` } },
+                { customerName: { [Op.like]: `%${search}%` } },
+                { phone: { [Op.like]: `%${search}%` } },
+                { email: { [Op.like]: `%${search}%` } }
+            ];
+        }
+
+        if (startDate && endDate) {
+            whereClause.createdAt = {
+                [Op.between]: [new Date(startDate), new Date(endDate)]
+            };
         }
 
         const { count, rows: orders } = await db.Order.findAndCountAll({
@@ -376,11 +418,12 @@ export const getAllOrders = async (req, res) => {
                 {
                     model: db.User,
                     as: 'user',
-                    attributes: ['id', 'userName', 'email', 'phone']
+                    attributes: ['id', 'userName', 'email', 'phone'],
+                    required: false
                 },
                 {
                     model: db.OrderDetail,
-                    as: 'details',
+                    as: 'OrderDetails',
                     include: [
                         {
                             model: db.Product,
@@ -395,6 +438,20 @@ export const getAllOrders = async (req, res) => {
             order: [['createdAt', 'DESC']]
         });
 
+        // Calculate summary statistics
+        const allOrders = await db.Order.findAll({
+            attributes: ['status', 'totalAmount']
+        });
+
+        const summary = {
+            totalRevenue: allOrders.reduce((sum, order) => sum + parseFloat(order.totalAmount || 0), 0),
+            pendingCount: allOrders.filter(o => o.status === 'pending').length,
+            confirmedCount: allOrders.filter(o => o.status === 'confirmed').length,
+            shippingCount: allOrders.filter(o => o.status === 'shipping').length,
+            deliveredCount: allOrders.filter(o => o.status === 'delivered').length,
+            cancelledCount: allOrders.filter(o => o.status === 'cancelled').length
+        };
+
         return res.status(200).json({
             success: true,
             message: 'Lấy danh sách đơn hàng thành công',
@@ -405,7 +462,8 @@ export const getAllOrders = async (req, res) => {
                     totalPages: Math.ceil(count / limit),
                     totalOrders: count,
                     limit: limit
-                }
+                },
+                summary: summary
             }
         });
 
@@ -420,24 +478,24 @@ export const getAllOrders = async (req, res) => {
 };
 
 /**
- * PUT /api/orders/:id/status (Admin)
+ * PUT /api/admin/orders/:id/status (Admin)
  * Cập nhật trạng thái đơn hàng
- * Status: 1 = Đang xử lý, 2 = Đang giao, 3 = Đã giao, 4 = Đã hủy
+ * Status: pending, confirmed, shipping, delivered, cancelled
  */
 export const updateOrderStatus = async (req, res) => {
     const transaction = await db.sequelize.transaction();
 
     try {
         const orderId = req.params.id;
-        const { status } = req.body;
+        const { status, note } = req.body;
 
         // Validate status
-        const validStatuses = [1, 2, 3, 4]; // 1: processing, 2: shipping, 3: delivered, 4: cancelled
-        if (!status || !validStatuses.includes(parseInt(status))) {
+        const validStatuses = ['pending', 'processing', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'];
+        if (!status || !validStatuses.includes(status)) {
             await transaction.rollback();
             return res.status(400).json({
                 success: false,
-                message: 'Trạng thái không hợp lệ. Status phải là: 1 (Đang xử lý), 2 (Đang giao), 3 (Đã giao), 4 (Đã hủy)'
+                message: `Trạng thái không hợp lệ. Status phải là một trong: ${validStatuses.join(', ')}`
             });
         }
 
@@ -446,7 +504,7 @@ export const updateOrderStatus = async (req, res) => {
             include: [
                 {
                     model: db.OrderDetail,
-                    as: 'details'
+                    as: 'OrderDetails'
                 }
             ],
             transaction
@@ -461,7 +519,7 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         // Kiểm tra logic: không thể thay đổi từ trạng thái đã giao/đã hủy
-        if (order.status === 3 || order.status === 4) {
+        if (order.status === 'delivered' || order.status === 'completed' || order.status === 'cancelled') {
             await transaction.rollback();
             return res.status(400).json({
                 success: false,
@@ -470,27 +528,32 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         const oldStatus = order.status;
-        const newStatus = parseInt(status);
+        const newStatus = status;
 
-        // Nếu status đổi thành 'cancelled' (4), hoàn trả stock
-        if (newStatus === 4 && oldStatus !== 4) {
+        // Nếu status đổi thành 'cancelled', hoàn trả stock
+        if (newStatus === 'cancelled' && oldStatus !== 'cancelled') {
             // Hoàn trả số lượng sản phẩm về kho
-            const restoreStockPromises = order.details.map(detail => {
-                return db.Product.increment(
-                    'quantity',
-                    {
-                        by: detail.quantity,
-                        where: { id: detail.productId },
-                        transaction
-                    }
-                );
-            });
+            if (order.OrderDetails && order.OrderDetails.length > 0) {
+                const restoreStockPromises = order.OrderDetails.map(detail => {
+                    return db.Product.increment(
+                        'quantity',
+                        {
+                            by: detail.quantity,
+                            where: { id: detail.productId },
+                            transaction
+                        }
+                    );
+                });
 
-            await Promise.all(restoreStockPromises);
+                await Promise.all(restoreStockPromises);
+            }
         }
 
-        // Cập nhật status
+        // Cập nhật status và note
         order.status = newStatus;
+        if (note) {
+            order.note = note;
+        }
         await order.save({ transaction });
 
         await transaction.commit();
@@ -500,7 +563,7 @@ export const updateOrderStatus = async (req, res) => {
             include: [
                 {
                     model: db.OrderDetail,
-                    as: 'details',
+                    as: 'OrderDetails',
                     include: [
                         {
                             model: db.Product,
@@ -526,6 +589,151 @@ export const updateOrderStatus = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Lỗi khi cập nhật trạng thái đơn hàng',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * PUT /api/admin/orders/:id/payment-status (Admin)
+ * Cập nhật trạng thái thanh toán và transactionId của đơn hàng
+ */
+export const updatePaymentStatus = async (req, res) => {
+    const transaction = await db.sequelize.transaction();
+    try {
+        const orderId = req.params.id;
+        const { paymentStatus, transactionId, note } = req.body;
+
+        const validPaymentStatuses = ['pending', 'paid', 'failed', 'refunded'];
+        if (!paymentStatus || !validPaymentStatuses.includes(paymentStatus)) {
+            await transaction.rollback();
+            return res.status(400).json({
+                success: false,
+                message: `paymentStatus không hợp lệ. Phải là một trong: ${validPaymentStatuses.join(', ')}`
+            });
+        }
+
+        const order = await db.Order.findByPk(orderId, { transaction });
+        if (!order) {
+            await transaction.rollback();
+            return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+        }
+
+        // Update paymentStatus and optionally transactionId and note
+        order.paymentStatus = paymentStatus;
+        if (transactionId !== undefined) order.transactionId = transactionId;
+        if (note) order.note = note;
+
+        await order.save({ transaction });
+        await transaction.commit();
+
+        // Return updated order (fresh)
+        const updated = await db.Order.findByPk(orderId, {
+            include: [
+                { model: db.OrderDetail, as: 'OrderDetails', include: [{ model: db.Product, as: 'product', attributes: ['id', 'title', 'image'] }] },
+                { model: db.User, as: 'user', attributes: ['id', 'fullName', 'email', 'phone'] },
+                { model: db.Discount, as: 'discount' }
+            ]
+        });
+
+        return res.status(200).json({ success: true, message: 'Cập nhật trạng thái thanh toán thành công', data: { order: updated } });
+
+    } catch (error) {
+        await transaction.rollback();
+        console.error('Update payment status error:', error);
+        return res.status(500).json({ success: false, message: 'Lỗi khi cập nhật trạng thái thanh toán', error: error.message });
+    }
+};
+
+/**
+ * GET /api/orders/my-orders
+ * Lấy danh sách đơn hàng của user (có phân trang)
+ */
+export const getMyOrders = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+        const status = req.query.status; // Filter theo status
+        const paymentStatus = req.query.paymentStatus; // Filter theo paymentStatus
+
+        // Lấy thông tin user để query theo phone/email nếu cần
+        const user = await db.User.findByPk(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy thông tin user'
+            });
+        }
+
+        // Build where clause: Tìm theo userId HOẶC phone HOẶC email
+        const { Op } = db.Sequelize;
+        const whereClause = {
+            [Op.or]: [
+                { userId: userId },
+                { phone: user.phone },
+                { email: user.email }
+            ]
+        };
+
+        if (status) {
+            whereClause.status = status;
+        }
+        if (paymentStatus) {
+            whereClause.paymentStatus = paymentStatus;
+        }
+
+        // Đếm tổng số đơn hàng
+        const totalOrders = await db.Order.count({
+            where: whereClause
+        });
+
+        // Lấy danh sách đơn hàng với pagination
+        const orders = await db.Order.findAll({
+            where: whereClause,
+            include: [
+                {
+                    model: db.OrderDetail,
+                    as: 'OrderDetails',
+                    include: [
+                        {
+                            model: db.Product,
+                            as: 'product',
+                            attributes: ['id', 'title', 'image', 'price', 'priceSale']
+                        }
+                    ]
+                }
+            ],
+            limit: limit,
+            offset: offset,
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Format lại data để frontend dễ xử lý
+        const formattedOrders = orders.map(order => {
+            return order.toJSON();
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách đơn hàng thành công',
+            data: {
+                orders: formattedOrders,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(totalOrders / limit),
+                    totalOrders: totalOrders,
+                    limit: limit
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Get my orders error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy danh sách đơn hàng',
             error: error.message
         });
     }

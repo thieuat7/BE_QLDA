@@ -1,3 +1,76 @@
+/**
+ * GET /api/products/sale
+ * Lấy danh sách sản phẩm đang sale (isSale = true, dùng priceSale)
+ */
+export const getSaleProducts = async (req, res) => {
+    try {
+        const products = await db.Product.findAll({
+            where: { isActive: true, isSale: true },
+            attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
+            include: [
+                {
+                    model: db.ProductCategory,
+                    as: 'category',
+                    attributes: ['id', 'title', 'alias']
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        // Đảm bảo trả về giá sale
+        const saleProducts = products.map(p => ({
+            ...p.toJSON(),
+            finalPrice: p.priceSale || p.price
+        }));
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách sản phẩm sale thành công',
+            data: { products: saleProducts }
+        });
+    } catch (error) {
+        console.error('Get sale products error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy sản phẩm sale',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/products/hot
+ * Lấy danh sách sản phẩm hot (isHot = true)
+ */
+export const getHotProducts = async (req, res) => {
+    try {
+        const products = await db.Product.findAll({
+            where: { isActive: true, isHot: true },
+            attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
+            include: [
+                {
+                    model: db.ProductCategory,
+                    as: 'category',
+                    attributes: ['id', 'title', 'alias']
+                }
+            ],
+            order: [['createdAt', 'DESC']]
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách sản phẩm hot thành công',
+            data: { products }
+        });
+    } catch (error) {
+        console.error('Get hot products error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy sản phẩm hot',
+            error: error.message
+        });
+    }
+};
 import db from '../models/index.js';
 import { Op } from 'sequelize';
 
@@ -34,7 +107,7 @@ export const getAllProducts = async (req, res) => {
         // Query
         const { count, rows: products } = await db.Product.findAndCountAll({
             where: whereClause,
-            attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'productCategoryId', 'createdAt'],
+            attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
             include: [
                 {
                     model: db.ProductCategory,

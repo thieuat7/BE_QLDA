@@ -43,7 +43,8 @@ db.Product = sequelize.define('Product', {
   productCategoryId: DataTypes.INTEGER,
   isActive: DataTypes.BOOLEAN,
   isHome: DataTypes.BOOLEAN,
-  isHot: DataTypes.BOOLEAN
+  isHot: DataTypes.BOOLEAN,
+  isSale: DataTypes.BOOLEAN
 });
 
 db.ProductCategory = sequelize.define('ProductCategory', {
@@ -71,7 +72,10 @@ db.User = sequelize.define('User', {
   phone: DataTypes.STRING,
   email: DataTypes.STRING,
   userName: DataTypes.STRING,
-  passwordHash: DataTypes.STRING
+  passwordHash: DataTypes.STRING,
+  googleId: DataTypes.STRING,
+  facebookId: DataTypes.STRING,
+  avatar: DataTypes.STRING
 });
 
 db.Order = sequelize.define('Order', {
@@ -84,7 +88,10 @@ db.Order = sequelize.define('Order', {
   totalAmount: DataTypes.DECIMAL(18, 2),
   quantity: DataTypes.INTEGER,
   typePayment: DataTypes.INTEGER,
-  status: DataTypes.INTEGER,
+  status: {
+    type: DataTypes.ENUM('pending', 'processing', 'confirmed', 'shipping', 'delivered', 'completed', 'cancelled'),
+    defaultValue: 'pending'
+  },
   discountId: DataTypes.INTEGER,
   discountValue: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
   paymentStatus: { type: DataTypes.ENUM('pending', 'paid', 'failed', 'refunded'), defaultValue: 'pending' },
@@ -137,7 +144,7 @@ db.CartItem.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 // Order associations
 db.Order.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
 db.Order.belongsTo(db.Discount, { foreignKey: 'discountId', as: 'discount' });
-db.Order.hasMany(db.OrderDetail, { foreignKey: 'orderId', as: 'details' });
+db.Order.hasMany(db.OrderDetail, { foreignKey: 'orderId', as: 'OrderDetails' });
 db.OrderDetail.belongsTo(db.Order, { foreignKey: 'orderId', as: 'order' });
 db.OrderDetail.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 

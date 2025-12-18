@@ -1,4 +1,5 @@
 import db from '../models/index.js';
+import bcrypt from 'bcryptjs';
 
 /**
  * GET /api/users/me
@@ -165,6 +166,249 @@ export const getAllUsers = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Lỗi khi lấy danh sách users',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * POST /api/users
+ * Admin tạo user mới
+ */
+export const createUser = async (req, res) => {
+    try {
+        const { userName, email, password, fullName, phone, role } = req.body;
+
+        // Validate required fields
+        if (!userName || !email || !password) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp đầy đủ thông tin: userName, email, password'
+            });
+        }
+
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email không đúng định dạng'
+            });
+        }
+
+        // Check existing username
+        const existingUserName = await db.User.findOne({
+            where: { userName: userName }
+        });
+
+        if (existingUserName) {
+            return res.status(409).json({
+                success: false,
+                message: 'Username đã tồn tại'
+            });
+        }
+
+        // Check existing email
+        const existingEmail = await db.User.findOne({
+            where: { email: email }
+        });
+
+        if (existingEmail) {
+            return res.status(409).json({
+                success: false,
+                message: 'Email đã được sử dụng'
+            });
+        }
+
+        // Validate role (chấp nhận 'admin', 'customer', 'user')
+        const userRole = role && ['admin', 'customer', 'user'].includes(role) ? role : 'customer';
+
+        // Hash password
+        const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Create user
+        const newUser = await db.User.create({
+            userName: userName,
+            email: email,
+            password: hashedPassword,
+            fullName: fullName || null,
+            phone: phone || null,
+            role: userRole
+        });
+
+        return res.status(201).json({
+            success: true,
+            message: 'Tạo user thành công',
+            data: {
+                user: {
+                    id: newUser.id,
+                    userName: newUser.userName,
+                    email: newUser.email,
+                    fullName: newUser.fullName,
+                    phone: newUser.phone,
+                    role: newUser.role,
+                    createdAt: newUser.createdAt
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Create user error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi tạo user',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * GET /api/users/:id
+ * Admin lấy thông tin chi tiết user theo id
+ */
+export const getUserById = async (req, res) => {
+    try {
+        const userId = req.params.id;
+
+        const user = await db.User.findByPk(userId, {
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+        });
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy user với ID này'
+            });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy thông tin user thành công',
+            data: { user }
+        });
+
+    } catch (error) {
+        console.error('Get user by id error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy thông tin user',
+            error: error.message
+        });
+    }
+};
+
+/**
+ * PUT /api/users/:id
+ * Admin cập nhật thông tin user
+ */
+export const updateUserByAdmin = async (req, res) => {
+    try {
+        const userId = req.params.id;
+        const { userName, email, fullName, phone, role } = req.body;
+
+        // Debug log
+        console.log('🔍 Update user request:', { userId, body: req.body, roleType: typeof role, roleValue: role });
+
+        // Validate: ít nhất phải có 1 field để update
+        if (!userName && !email && !fullName && !phone && !role) {
+            return res.status(400).json({
+                success: false,
+                message: 'Vui lòng cung cấp ít nhất một thông tin để cập nhật'
+            });
+        }
+
+        // Kiểm tra user có tồn tại không
+        const user = await db.User.findByPk(userId);
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'Không tìm thấy user với ID này'
+            });
+        }
+
+        // Validate email format nếu có và chỉ check duplicate nếu email thay đổi
+        if (email && email !== user.email) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Email không đúng định dạng'
+                });
+            }
+
+            // Kiểm tra email đã tồn tại chưa
+            const existingUser = await db.User.findOne({
+                where: { email: email }
+            });
+
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Email đã được sử dụng bởi người dùng khác'
+                });
+            }
+        }
+
+        // Kiểm tra username đã tồn tại chưa (chỉ check nếu username thay đổi)
+        if (userName && userName !== user.userName) {
+            const existingUser = await db.User.findOne({
+                where: { userName: userName }
+            });
+
+            if (existingUser) {
+                return res.status(409).json({
+                    success: false,
+                    message: 'Username đã được sử dụng bởi người dùng khác'
+                });
+            }
+        }
+
+        // Validate role (chấp nhận 'user' hoặc 'customer' cho khách hàng, 'admin' cho quản trị viên)
+        if (role && !['admin', 'customer', 'user'].includes(role)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Role chỉ có thể là "admin", "customer" hoặc "user"'
+            });
+        }
+
+        // Không cho phép admin tự thay đổi role của chính mình
+        if (userId === req.user.id && role && role !== user.role) {
+            return res.status(400).json({
+                success: false,
+                message: 'Bạn không thể thay đổi role của chính mình'
+            });
+        }
+
+        // Tạo object chứa các field cần update
+        const updateData = {};
+        if (userName) updateData.userName = userName;
+        if (email) updateData.email = email;
+        if (fullName) updateData.fullName = fullName;
+        if (phone) updateData.phone = phone;
+        if (role) updateData.role = role;
+
+        // Cập nhật vào database
+        await db.User.update(updateData, {
+            where: { id: userId }
+        });
+
+        // Lấy lại thông tin user sau khi update
+        const updatedUser = await db.User.findByPk(userId, {
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Cập nhật thông tin user thành công',
+            data: { user: updatedUser }
+        });
+
+    } catch (error) {
+        console.error('Update user by admin error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi cập nhật thông tin user',
             error: error.message
         });
     }

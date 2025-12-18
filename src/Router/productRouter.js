@@ -1,11 +1,13 @@
 import express from 'express';
-import { getAllProducts, searchProducts, getProductById, createProduct, updateProduct, deleteProduct } from '../controller/ProductController.js';
+import { getAllProducts, searchProducts, getProductById, createProduct, updateProduct, deleteProduct, getSaleProducts, getHotProducts } from '../controller/ProductController.js';
 import { verifyToken, checkAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 
 const router = express.Router();
 
 // Public routes
+router.get('/sale', getSaleProducts);           // Lấy sản phẩm sale
+router.get('/hot', getHotProducts);             // Lấy sản phẩm hot
 router.get('/search', searchProducts);          // Tìm kiếm sản phẩm
 router.get('/:id', getProductById);             // Lấy chi tiết 1 sản phẩm
 router.get('/', getAllProducts);                // Lấy danh sách sản phẩm (có phân trang, filter, sort)

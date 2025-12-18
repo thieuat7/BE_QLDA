@@ -1,16 +1,17 @@
 import express from 'express';
-import { checkout, getUserOrders, getOrderById, getAllOrders, updateOrderStatus } from '../controller/OrderController.js';
-import { verifyToken, checkAdmin } from '../middleware/auth.js';
+import { checkout, getOrderById, getOrders, cancelOrder } from '../controller/OrderController_Simple.js';
+import { getMyOrders } from '../controller/OrderController.js';
+import { verifyToken, optionalAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Admin routes - phải đặt trước các routes có param động
-router.get('/admin/all', verifyToken, checkAdmin, getAllOrders);              // Admin: Lấy tất cả đơn hàng
-router.put('/:id/status', verifyToken, checkAdmin, updateOrderStatus);       // Admin: Cập nhật trạng thái đơn hàng
+// Protected routes (cần login)
+router.get('/my-orders', verifyToken, getMyOrders);  // Lấy danh sách đơn hàng của user đã login
 
-// User routes
-router.post('/checkout', verifyToken, checkout);           // Đặt hàng
-router.get('/', verifyToken, getUserOrders);               // Lấy danh sách đơn hàng của user
-router.get('/:id', verifyToken, getOrderById);             // Lấy chi tiết 1 đơn hàng
+// Public routes (không cần login để test)
+router.post('/checkout', optionalAuth, checkout);    // Tạo đơn hàng (có thể login hoặc không)
+router.get('/:id', getOrderById);             // Lấy chi tiết đơn hàng
+router.get('/', getOrders);                   // Lấy danh sách đơn hàng (by phone/email)
+router.put('/:id/cancel', cancelOrder);       // Hủy đơn hàng
 
 export default router;
