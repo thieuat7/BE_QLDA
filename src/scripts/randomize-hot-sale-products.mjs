@@ -1,4 +1,4 @@
-import db from '../src/models/index.js';
+import db from '../models/index.js';
 
 async function randomizeHotAndSale() {
     try {

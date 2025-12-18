@@ -15,6 +15,14 @@ const VNPAY_CONFIG = {
 };
 
 /**
+ * Tạo chữ ký HMAC SHA512 cho VNPAY
+ */
+function createSignature(data, secretKey) {
+    const hmac = crypto.createHmac('sha512', secretKey);
+    return hmac.update(Buffer.from(data, 'utf-8')).digest('hex');
+}
+
+/**
  * MOMO Configuration
  * Đăng ký tài khoản test tại: https://developers.momo.vn/
  */
@@ -38,6 +46,14 @@ const BANK_CONFIG = {
     accountName: 'BABY Shark', // Tên chủ tài khoản
     branch: 'Chi nhanh Ho Chi Minh' // Chi nhánh (không bắt buộc)
 };
+
+/**
+ * Tạo chữ ký HMAC SHA256 cho Momo
+ */
+function createMomoSignature(data, secretKey) {
+    const hmac = crypto.createHmac('sha256', secretKey);
+    return hmac.update(data).digest('hex');
+}
 
 /**
  * Sắp xếp object theo key (yêu cầu của VNPAY)
@@ -343,14 +359,6 @@ export const momoPayment = async (req, res) => {
         return res.status(500).json({ success: false, message: 'MoMo payment failed', error: error.response?.data || error.message });
     }
 };
-
-/**
- * Tạo chữ ký HMAC SHA256 cho Momo
- */
-function createMomoSignature(data, secretKey) {
-    const hmac = crypto.createHmac('sha256', secretKey);
-    return hmac.update(data).digest('hex');
-}
 
 /**
  * POST /api/payment/momo/create-url

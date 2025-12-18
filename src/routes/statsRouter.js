@@ -4,7 +4,7 @@ import {
     getRevenueChart,
     getTopProducts,
     getRecentOrders
-} from '../controller/StatsController.js';
+} from '../controllers/StatsController.js';
 import { verifyToken, checkAdmin } from '../middleware/auth.js';
 
 const router = express.Router();

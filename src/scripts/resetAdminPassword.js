@@ -1,5 +1,5 @@
 import bcrypt from 'bcrypt';
-import db from '../src/models/index.js';
+import db from '../models/index.js';
 
 /**
  * Script: Reset password cho admin
