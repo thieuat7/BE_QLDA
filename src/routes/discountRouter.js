@@ -1,5 +1,5 @@
 import express from 'express';
-import { createDiscount, getAllDiscounts, getPublicDiscounts, validateDiscountCode, updateDiscount, deleteDiscount } from '../controller/DiscountController.js';
+import { createDiscount, getAllDiscounts, getPublicDiscounts, validateDiscountCode, updateDiscount, deleteDiscount } from '../controllers/DiscountController.js';
 import { verifyToken, checkAdmin } from '../middleware/auth.js';
 
 const router = express.Router();

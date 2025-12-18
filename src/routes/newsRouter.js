@@ -1,5 +1,5 @@
 import express from 'express';
-import { getVnexpressNews } from '../controller/VnExpressController.js';
+import { getVnexpressNews } from '../controllers/VnExpressController.js';
 
 const router = express.Router();
 

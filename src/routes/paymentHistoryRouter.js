@@ -6,7 +6,7 @@ import {
     getAllPaymentHistory,
     getAdminOrderDetail,
     getPaymentStatistics
-} from '../controller/PaymentHistoryController.js';
+} from '../controllers/PaymentHistoryController.js';
 
 const router = express.Router();
 

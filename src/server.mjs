@@ -2,8 +2,8 @@ import 'dotenv/config'
 import express from 'express'
 import path from 'path'
 import { fileURLToPath } from 'url'
-import InitRouter from './Router/router.js'
-import { connectDB } from './DataBase/database.mjs'
+import InitRouter from './routes/router.js'
+import { connectDB } from './database/database.mjs'
 import passport from './config/passport.mjs'
 
 const __filename = fileURLToPath(import.meta.url)
