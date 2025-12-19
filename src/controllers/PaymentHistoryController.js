@@ -76,7 +76,9 @@ export const getUserPaymentHistory = async (req, res) => {
             ],
             order: [['createdAt', 'DESC']],
             limit: parseInt(limit),
-            offset: parseInt(offset)
+            offset: parseInt(offset),
+            raw: true,
+            nest: true
         });
 
         // Format dữ liệu trả về
@@ -186,7 +188,9 @@ export const getUserOrderDetail = async (req, res) => {
                     model: db.Discount,
                     as: 'discount'
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         if (!order) {
@@ -330,7 +334,9 @@ export const getAllPaymentHistory = async (req, res) => {
             ],
             order: [[sortField, order]],
             limit: parseInt(limit),
-            offset: parseInt(offset)
+            offset: parseInt(offset),
+            raw: true,
+            nest: true
         });
 
         // Format dữ liệu trả về
@@ -383,7 +389,9 @@ export const getAllPaymentHistory = async (req, res) => {
         // Tính toán thống kê tổng quan
         const allOrders = await db.Order.findAll({
             where: whereCondition,
-            attributes: ['totalAmount', 'discountValue', 'paymentStatus', 'status']
+            attributes: ['totalAmount', 'discountValue', 'paymentStatus', 'status'],
+            raw: true,
+            nest: true
         });
 
         const statistics = {
@@ -459,7 +467,9 @@ export const getAdminOrderDetail = async (req, res) => {
                     model: db.Discount,
                     as: 'discount'
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         if (!order) {
@@ -540,7 +550,9 @@ export const getPaymentStatistics = async (req, res) => {
         const orders = await db.Order.findAll({
             where: whereCondition,
             attributes: ['id', 'totalAmount', 'discountValue', 'paymentStatus', 'status', 'createdAt', 'typePayment'],
-            order: [['createdAt', 'ASC']]
+            order: [['createdAt', 'ASC']],
+            raw: true,
+            nest: true
         });
 
         // Thống kê theo phương thức thanh toán

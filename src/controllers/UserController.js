@@ -65,7 +65,9 @@ export const updateMyProfile = async (req, res) => {
 
             // Kiểm tra email đã tồn tại chưa (trừ email của chính user này)
             const existingUser = await db.User.findOne({
-                where: { email: email }
+                where: { email: email },
+                raw: true,
+                nest: true
             });
 
             if (existingUser && existingUser.id !== userId) {
@@ -79,7 +81,9 @@ export const updateMyProfile = async (req, res) => {
         // Kiểm tra username đã tồn tại chưa (trừ username của chính user này)
         if (userName) {
             const existingUser = await db.User.findOne({
-                where: { userName: userName }
+                where: { userName: userName },
+                raw: true,
+                nest: true
             });
 
             if (existingUser && existingUser.id !== userId) {
@@ -104,7 +108,9 @@ export const updateMyProfile = async (req, res) => {
 
         // Lấy lại thông tin user sau khi update
         const updatedUser = await db.User.findByPk(userId, {
-            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt'],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -144,7 +150,9 @@ export const getAllUsers = async (req, res) => {
             attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt'],
             limit: limit,
             offset: offset,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -198,7 +206,9 @@ export const createUser = async (req, res) => {
 
         // Check existing username
         const existingUserName = await db.User.findOne({
-            where: { userName: userName }
+            where: { userName: userName },
+            raw: true,
+            nest: true
         });
 
         if (existingUserName) {
@@ -210,7 +220,9 @@ export const createUser = async (req, res) => {
 
         // Check existing email
         const existingEmail = await db.User.findOne({
-            where: { email: email }
+            where: { email: email },
+            raw: true,
+            nest: true
         });
 
         if (existingEmail) {
@@ -271,7 +283,9 @@ export const getUserById = async (req, res) => {
         const userId = req.params.id;
 
         const user = await db.User.findByPk(userId, {
-            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt'],
+            raw: true,
+            nest: true
         });
 
         if (!user) {
@@ -318,7 +332,10 @@ export const updateUserByAdmin = async (req, res) => {
         }
 
         // Kiểm tra user có tồn tại không
-        const user = await db.User.findByPk(userId);
+        const user = await db.User.findByPk(userId, {
+            raw: true,
+            nest: true
+        });
 
         if (!user) {
             return res.status(404).json({
@@ -339,7 +356,9 @@ export const updateUserByAdmin = async (req, res) => {
 
             // Kiểm tra email đã tồn tại chưa
             const existingUser = await db.User.findOne({
-                where: { email: email }
+                where: { email: email },
+                raw: true,
+                nest: true
             });
 
             if (existingUser) {
@@ -353,7 +372,9 @@ export const updateUserByAdmin = async (req, res) => {
         // Kiểm tra username đã tồn tại chưa (chỉ check nếu username thay đổi)
         if (userName && userName !== user.userName) {
             const existingUser = await db.User.findOne({
-                where: { userName: userName }
+                where: { userName: userName },
+                raw: true,
+                nest: true
             });
 
             if (existingUser) {
@@ -395,7 +416,9 @@ export const updateUserByAdmin = async (req, res) => {
 
         // Lấy lại thông tin user sau khi update
         const updatedUser = await db.User.findByPk(userId, {
-            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt'],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -423,7 +446,10 @@ export const deleteUser = async (req, res) => {
         const userId = req.params.id;
 
         // Kiểm tra user có tồn tại không
-        const user = await db.User.findByPk(userId);
+        const user = await db.User.findByPk(userId, {
+            raw: true,
+            nest: true
+        });
 
         if (!user) {
             return res.status(404).json({

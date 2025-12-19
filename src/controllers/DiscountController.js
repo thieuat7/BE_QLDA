@@ -53,7 +53,9 @@ export const createDiscount = async (req, res) => {
 
         // Check duplicate code
         const existingDiscount = await db.Discount.findOne({
-            where: { code: code.toUpperCase() }
+            where: { code: code.toUpperCase() },
+            raw: true,
+            nest: true
         });
 
         if (existingDiscount) {
@@ -123,7 +125,9 @@ export const getPublicDiscounts = async (req, res) => {
                 ]
             },
             attributes: ['id', 'code', 'description', 'type', 'value', 'minOrderAmount', 'maxDiscount', 'startDate', 'endDate', 'usageLimit', 'usedCount'],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -164,7 +168,9 @@ export const getAllDiscounts = async (req, res) => {
             where: whereClause,
             limit: limit,
             offset: offset,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -200,7 +206,10 @@ export const updateDiscount = async (req, res) => {
         const discountId = req.params.id;
         const { description, value, minOrderAmount, maxDiscount, startDate, endDate, usageLimit, isActive } = req.body;
 
-        const discount = await db.Discount.findByPk(discountId);
+        const discount = await db.Discount.findByPk(discountId, {
+            raw: true,
+            nest: true
+        });
         if (!discount) {
             return res.status(404).json({
                 success: false,
@@ -208,8 +217,9 @@ export const updateDiscount = async (req, res) => {
             });
         }
 
-        // Update fields if provided
-        if (description !== undefined) discount.description = description;
+        // Update fields
+        const updateData = {};
+        if (description !== undefined) updateData.description = description;
         if (value !== undefined) {
             if (parseFloat(value) <= 0) {
                 return res.status(400).json({
@@ -223,29 +233,39 @@ export const updateDiscount = async (req, res) => {
                     message: 'Giảm giá theo phần trăm phải từ 0 đến 100'
                 });
             }
-            discount.value = parseFloat(value);
+            updateData.value = parseFloat(value);
         }
-        if (minOrderAmount !== undefined) discount.minOrderAmount = parseFloat(minOrderAmount);
-        if (maxDiscount !== undefined) discount.maxDiscount = parseFloat(maxDiscount);
-        if (startDate !== undefined) discount.startDate = new Date(startDate);
-        if (endDate !== undefined) discount.endDate = new Date(endDate);
-        if (usageLimit !== undefined) discount.usageLimit = parseInt(usageLimit);
-        if (isActive !== undefined) discount.isActive = isActive;
+        if (minOrderAmount !== undefined) updateData.minOrderAmount = parseFloat(minOrderAmount);
+        if (maxDiscount !== undefined) updateData.maxDiscount = parseFloat(maxDiscount);
+        if (startDate !== undefined) updateData.startDate = new Date(startDate);
+        if (endDate !== undefined) updateData.endDate = new Date(endDate);
+        if (usageLimit !== undefined) updateData.usageLimit = parseInt(usageLimit);
+        if (isActive !== undefined) updateData.isActive = isActive;
 
         // Validate dates if both are present
-        if (discount.startDate >= discount.endDate) {
+        const finalStartDate = updateData.startDate || new Date(discount.startDate);
+        const finalEndDate = updateData.endDate || new Date(discount.endDate);
+        if (finalStartDate >= finalEndDate) {
             return res.status(400).json({
                 success: false,
                 message: 'Ngày bắt đầu phải trước ngày kết thúc'
             });
         }
 
-        await discount.save();
+        await db.Discount.update(updateData, {
+            where: { id: discountId }
+        });
+
+        // Lấy lại discount sau update
+        const updatedDiscount = await db.Discount.findByPk(discountId, {
+            raw: true,
+            nest: true
+        });
 
         return res.status(200).json({
             success: true,
             message: 'Cập nhật mã giảm giá thành công',
-            data: { discount }
+            data: { discount: updatedDiscount }
         });
 
     } catch (error) {
@@ -279,7 +299,9 @@ export const validateDiscountCode = async (req, res) => {
         const discount = await db.Discount.findOne({
             where: {
                 code: code.toUpperCase()
-            }
+            },
+            raw: true,
+            nest: true
         });
 
         if (!discount) {
@@ -374,7 +396,10 @@ export const deleteDiscount = async (req, res) => {
     try {
         const discountId = req.params.id;
 
-        const discount = await db.Discount.findByPk(discountId);
+        const discount = await db.Discount.findByPk(discountId, {
+            raw: true,
+            nest: true
+        });
         if (!discount) {
             return res.status(404).json({
                 success: false,
@@ -382,7 +407,9 @@ export const deleteDiscount = async (req, res) => {
             });
         }
 
-        await discount.destroy();
+        await db.Discount.destroy({
+            where: { id: discountId }
+        });
 
         return res.status(200).json({
             success: true,

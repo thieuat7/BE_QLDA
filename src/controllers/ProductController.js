@@ -287,7 +287,10 @@ export const createProduct = async (req, res) => {
             });
         }
 
-        const category = await db.ProductCategory.findByPk(productCategoryId);
+        const category = await db.ProductCategory.findByPk(productCategoryId, {
+            raw: true,
+            nest: true
+        });
         if (!category) {
             return res.status(404).json({
                 success: false,
@@ -350,7 +353,10 @@ export const updateProduct = async (req, res) => {
         const productId = req.params.id;
         const { title, alias, productCode, description, detail, price, originalPrice, priceSale, quantity, productCategoryId, isActive, isHot } = req.body;
 
-        const product = await db.Product.findByPk(productId);
+        const product = await db.Product.findByPk(productId, {
+            raw: true,
+            nest: true
+        });
         if (!product) {
             return res.status(404).json({
                 success: false,
@@ -373,7 +379,10 @@ export const updateProduct = async (req, res) => {
         }
 
         if (productCategoryId && productCategoryId !== product.productCategoryId) {
-            const category = await db.ProductCategory.findByPk(productCategoryId);
+            const category = await db.ProductCategory.findByPk(productCategoryId, {
+                raw: true,
+                nest: true
+            });
             if (!category) {
                 return res.status(404).json({
                     success: false,
@@ -407,7 +416,10 @@ export const updateProduct = async (req, res) => {
         });
 
         // Lấy lại product sau khi update (Không cần include để tránh lỗi)
-        const updatedProduct = await db.Product.findByPk(productId);
+        const updatedProduct = await db.Product.findByPk(productId, {
+            raw: true,
+            nest: true
+        });
 
         return res.status(200).json({
             success: true,
@@ -435,7 +447,10 @@ export const deleteProduct = async (req, res) => {
     try {
         const productId = req.params.id;
 
-        const product = await db.Product.findByPk(productId);
+        const product = await db.Product.findByPk(productId, {
+            raw: true,
+            nest: true
+        });
         if (!product) {
             return res.status(404).json({
                 success: false,

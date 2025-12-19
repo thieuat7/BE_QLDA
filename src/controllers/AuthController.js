@@ -42,7 +42,9 @@ export const register = async (req, res) => {
 
         // 2. Kiểm tra email đã tồn tại chưa
         const existingUserByEmail = await db.User.findOne({
-            where: { email }
+            where: { email },
+            raw: true,
+            nest: true
         });
 
         if (existingUserByEmail) {
@@ -54,7 +56,9 @@ export const register = async (req, res) => {
 
         // Kiểm tra username đã tồn tại chưa
         const existingUserByUsername = await db.User.findOne({
-            where: { userName: username }
+            where: { userName: username },
+            raw: true,
+            nest: true
         });
 
         if (existingUserByUsername) {
@@ -129,15 +133,16 @@ export const login = async (req, res) => {
         // 2. Tìm user trong database bằng email
         const user = await db.User.findOne({
             where: { email },
-            attributes: ['id', 'userName', 'email', 'passwordHash', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt']
+            attributes: ['id', 'userName', 'email', 'passwordHash', 'fullName', 'phone', 'role', 'createdAt', 'updatedAt'],
+            raw: true,
+            nest: true
         });
 
         // Debug: Log để kiểm tra
         console.log('🔍 User data from DB:', {
             id: user?.id,
             email: user?.email,
-            role: user?.role,
-            dataValues: user?.dataValues
+            role: user?.role
         });
 
         if (!user) {
@@ -179,7 +184,7 @@ export const login = async (req, res) => {
             email: user.email,
             fullName: user.fullName,
             phone: user.phone,
-            role: user.role || user.dataValues?.role || 'user', // Fallback để lấy role
+            role: user.role || 'user',
             createdAt: user.createdAt
         };
 
@@ -214,7 +219,9 @@ export const getCurrentUser = async (req, res) => {
 
         // Lấy user và đảm bảo luôn có trường role
         const user = await db.User.findByPk(userId, {
-            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'googleId', 'facebookId', 'avatar', 'createdAt', 'updatedAt']
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'googleId', 'facebookId', 'avatar', 'createdAt', 'updatedAt'],
+            raw: true,
+            nest: true
         });
 
         if (!user) {
@@ -224,21 +231,19 @@ export const getCurrentUser = async (req, res) => {
             });
         }
 
-        // Chuyển user về plain object để tránh lỗi serialize
-        const plainUser = user.get ? user.get({ plain: true }) : user;
         return res.status(200).json({
             success: true,
             user: {
-                id: plainUser.id,
-                username: plainUser.userName,
-                email: plainUser.email,
-                fullName: plainUser.fullName,
-                phone: plainUser.phone,
-                role: plainUser.role, // Đảm bảo luôn trả về role
-                googleId: plainUser.googleId,
-                facebookId: plainUser.facebookId,
-                avatar: plainUser.avatar,
-                createdAt: plainUser.createdAt
+                id: user.id,
+                username: user.userName,
+                email: user.email,
+                fullName: user.fullName,
+                phone: user.phone,
+                role: user.role,
+                googleId: user.googleId,
+                facebookId: user.facebookId,
+                avatar: user.avatar,
+                createdAt: user.createdAt
             }
         });
 
@@ -291,7 +296,9 @@ export const updateProfile = async (req, res) => {
             where: {
                 userName: userName,
                 id: { [db.Sequelize.Op.ne]: userId }
-            }
+            },
+            raw: true,
+            nest: true
         });
 
         if (existingUser) {
@@ -322,7 +329,9 @@ export const updateProfile = async (req, res) => {
 
         // Lấy user info mới
         const updatedUser = await db.User.findByPk(userId, {
-            attributes: { exclude: ['passwordHash'] }
+            attributes: { exclude: ['passwordHash'] },
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -373,7 +382,9 @@ export const uploadAvatar = async (req, res) => {
 
         // Lấy user info mới
         const updatedUser = await db.User.findByPk(userId, {
-            attributes: { exclude: ['passwordHash'] }
+            attributes: { exclude: ['passwordHash'] },
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -415,7 +426,10 @@ export const changePassword = async (req, res) => {
         }
 
         // Lấy thông tin user hiện tại
-        const user = await db.User.findByPk(userId);
+        const user = await db.User.findByPk(userId, {
+            raw: true,
+            nest: true
+        });
         if (!user) {
             return res.status(404).json({
                 success: false,

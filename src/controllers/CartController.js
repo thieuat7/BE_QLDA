@@ -30,7 +30,9 @@ export const getCart = async (req, res) => {
                         }
                     ]
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         // Nếu chưa có cart thì tạo mới
@@ -93,7 +95,10 @@ export const addToCart = async (req, res) => {
         }
 
         // Kiểm tra sản phẩm có tồn tại không
-        const product = await db.Product.findByPk(productId);
+        const product = await db.Product.findByPk(productId, {
+            raw: true,
+            nest: true
+        });
         if (!product) {
             return res.status(404).json({
                 success: false,
@@ -110,7 +115,11 @@ export const addToCart = async (req, res) => {
         }
 
         // Tìm hoặc tạo cart
-        let cart = await db.Cart.findOne({ where: { userId: userId } });
+        let cart = await db.Cart.findOne({ 
+            where: { userId: userId },
+            raw: true,
+            nest: true
+        });
         if (!cart) {
             cart = await db.Cart.create({ userId: userId });
         }
@@ -120,7 +129,9 @@ export const addToCart = async (req, res) => {
             where: {
                 cartId: cart.id,
                 productId: productId
-            }
+            },
+            raw: true,
+            nest: true
         });
 
         if (cartItem) {
@@ -163,7 +174,9 @@ export const addToCart = async (req, res) => {
                         }
                     ]
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -215,7 +228,9 @@ export const updateCartItem = async (req, res) => {
                     model: db.Cart,
                     as: 'cart',
                     where: { userId: userId }
-                }]
+                }],
+                raw: true,
+                nest: true
             });
 
             if (!cartItem) {
@@ -225,7 +240,9 @@ export const updateCartItem = async (req, res) => {
                 });
             }
 
-            await cartItem.destroy();
+            await db.CartItem.destroy({
+                where: { id: cartItemId }
+            });
 
             return res.status(200).json({
                 success: true,
@@ -245,7 +262,9 @@ export const updateCartItem = async (req, res) => {
                     model: db.Product,
                     as: 'product'
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         if (!cartItem) {
@@ -264,14 +283,22 @@ export const updateCartItem = async (req, res) => {
         }
 
         // Cập nhật số lượng
-        cartItem.quantity = quantity;
-        await cartItem.save();
+        await db.CartItem.update(
+            { quantity: quantity },
+            { where: { id: cartItemId } }
+        );
+
+        // Lấy lại cart item sau update
+        const updatedCartItem = await db.CartItem.findByPk(cartItemId, {
+            raw: true,
+            nest: true
+        });
 
         return res.status(200).json({
             success: true,
             message: 'Cập nhật giỏ hàng thành công',
             data: {
-                cartItem: cartItem
+                cartItem: updatedCartItem
             }
         });
 
@@ -300,7 +327,9 @@ export const removeFromCart = async (req, res) => {
                 model: db.Cart,
                 as: 'cart',
                 where: { userId: userId }
-            }]
+            }],
+            raw: true,
+            nest: true
         });
 
         if (!cartItem) {
@@ -311,7 +340,9 @@ export const removeFromCart = async (req, res) => {
         }
 
         // Xóa cart item
-        await cartItem.destroy();
+        await db.CartItem.destroy({
+            where: { id: cartItemId }
+        });
 
         return res.status(200).json({
             success: true,
@@ -334,7 +365,6 @@ export const removeFromCart = async (req, res) => {
 /**
  * POST /api/cart/apply-discount
  * Áp dụng mã giảm giá vào giỏ hàng
- * Có thể áp dụng cho toàn bộ giỏ hoặc chỉ một số sản phẩm cụ thể
  */
 export const applyDiscount = async (req, res) => {
     try {
@@ -363,7 +393,9 @@ export const applyDiscount = async (req, res) => {
                         }
                     ]
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         if (!cart || cart.items.length === 0) {
@@ -404,7 +436,9 @@ export const applyDiscount = async (req, res) => {
             where: {
                 code: discountCode.toUpperCase(),
                 isActive: true
-            }
+            },
+            raw: true,
+            nest: true
         });
 
         if (!discount) {

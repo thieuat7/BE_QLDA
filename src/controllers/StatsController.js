@@ -16,7 +16,8 @@ export const getOverview = async (req, res) => {
             where: {
                 paymentStatus: 'paid'
             },
-            raw: true
+            raw: true,
+            nest: true
         });
 
         // 2. Tổng số đơn hàng (tất cả trạng thái)
@@ -29,7 +30,8 @@ export const getOverview = async (req, res) => {
                 [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
             ],
             group: ['status'],
-            raw: true
+            raw: true,
+            nest: true
         });
 
         // 4. Đơn hàng theo payment status
@@ -39,7 +41,8 @@ export const getOverview = async (req, res) => {
                 [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']
             ],
             group: ['paymentStatus'],
-            raw: true
+            raw: true,
+            nest: true
         });
 
         // 5. Tổng số user
@@ -63,7 +66,8 @@ export const getOverview = async (req, res) => {
                     [Op.gte]: startOfMonth
                 }
             },
-            raw: true
+            raw: true,
+            nest: true
         });
 
         // 9. Doanh thu hôm nay
@@ -79,7 +83,8 @@ export const getOverview = async (req, res) => {
                     [Op.gte]: startOfDay
                 }
             },
-            raw: true
+            raw: true,
+            nest: true
         });
 
         // Format response
@@ -168,7 +173,8 @@ export const getRevenueChart = async (req, res) => {
             },
             group: [db.sequelize.fn('DATE', db.sequelize.col('createdAt'))],
             order: [[db.sequelize.fn('DATE', db.sequelize.col('createdAt')), 'ASC']],
-            raw: true
+            raw: true,
+            nest: true
         });
 
         // Tạo mảng đầy đủ các ngày (bao gồm ngày không có doanh thu)
@@ -257,7 +263,9 @@ export const getTopProducts = async (req, res) => {
             group: ['productId', 'product.id', 'product->category.id'],
             order: [[db.sequelize.literal('totalSold'), 'DESC']],
             limit: limit,
-            subQuery: false
+            subQuery: false,
+            raw: true,
+            nest: true
         });
 
         // Format response
@@ -273,9 +281,9 @@ export const getTopProducts = async (req, res) => {
                 category: item.product.category
             },
             stats: {
-                totalSold: parseInt(item.dataValues.totalSold),
-                totalRevenue: parseFloat(item.dataValues.totalRevenue),
-                orderCount: parseInt(item.dataValues.orderCount)
+                totalSold: parseInt(item.totalSold),
+                totalRevenue: parseFloat(item.totalRevenue),
+                orderCount: parseInt(item.orderCount)
             }
         }));
 
@@ -325,7 +333,9 @@ export const getRecentOrders = async (req, res) => {
                 }
             ],
             limit: limit,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({

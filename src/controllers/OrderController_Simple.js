@@ -68,7 +68,11 @@ export const checkout = async (req, res) => {
 
         for (const item of items) {
             // Lấy thông tin product từ DB
-            const product = await db.Product.findByPk(item.productId, { transaction });
+            const product = await db.Product.findByPk(item.productId, { 
+                transaction,
+                raw: true,
+                nest: true
+            });
 
             if (!product) {
                 await transaction.rollback();
@@ -133,7 +137,11 @@ export const checkout = async (req, res) => {
         // 5. Tạo OrderDetails
         const orderDetails = [];
         for (const item of items) {
-            const product = await db.Product.findByPk(item.productId, { transaction });
+            const product = await db.Product.findByPk(item.productId, { 
+                transaction,
+                raw: true,
+                nest: true
+            });
             const actualPrice = product.priceSale || product.price;
 
             const detail = await db.OrderDetail.create({
@@ -149,8 +157,9 @@ export const checkout = async (req, res) => {
 
             // 6. Giảm số lượng tồn kho (nếu không phải reserveOnly)
             if (!newOrder.reserveOnly) {
-                await product.decrement('quantity', {
+                await db.Product.decrement('quantity', {
                     by: item.quantity,
+                    where: { id: item.productId },
                     transaction
                 });
             }
@@ -216,7 +225,9 @@ export const getOrderById = async (req, res) => {
                         }
                     ]
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         if (!order) {
@@ -271,7 +282,9 @@ export const getOrders = async (req, res) => {
             ],
             limit: parseInt(limit),
             offset: parseInt(offset),
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -314,7 +327,9 @@ export const cancelOrder = async (req, res) => {
                     as: 'OrderDetails'
                 }
             ],
-            transaction
+            transaction,
+            raw: true,
+            nest: true
         });
 
         if (!order) {
@@ -346,15 +361,26 @@ export const cancelOrder = async (req, res) => {
         }
 
         // Cập nhật status = 'cancelled'
-        order.status = 'cancelled';
-        await order.save({ transaction });
+        await db.Order.update(
+            { status: 'cancelled' },
+            { 
+                where: { id: id },
+                transaction 
+            }
+        );
 
         await transaction.commit();
+
+        // Lấy lại order sau update
+        const updatedOrder = await db.Order.findByPk(id, {
+            raw: true,
+            nest: true
+        });
 
         return res.status(200).json({
             success: true,
             message: 'Hủy đơn hàng thành công',
-            data: { order }
+            data: { order: updatedOrder }
         });
 
     } catch (error) {

@@ -48,7 +48,9 @@ export const checkout = async (req, res) => {
                     ]
                 }
             ],
-            transaction
+            transaction,
+            raw: true,
+            nest: true
         });
 
         if (!cart || !cart.items || cart.items.length === 0) {
@@ -104,7 +106,9 @@ export const checkout = async (req, res) => {
                     code: discountCode.toUpperCase(),
                     isActive: true
                 },
-                transaction
+                transaction,
+                raw: true,
+                nest: true
             });
 
             if (discount) {
@@ -219,7 +223,9 @@ export const checkout = async (req, res) => {
                     as: 'discount',
                     attributes: ['id', 'code', 'description', 'type', 'value']
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         return res.status(201).json({
@@ -278,7 +284,9 @@ export const getUserOrders = async (req, res) => {
             ],
             limit: limit,
             offset: offset,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -348,7 +356,9 @@ export const getOrderById = async (req, res) => {
                     attributes: ['id', 'code', 'description', 'type', 'value'],
                     required: false
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         if (!order) {
@@ -441,12 +451,16 @@ export const getAllOrders = async (req, res) => {
             ],
             limit: limit,
             offset: offset,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         // Calculate summary statistics
         const allOrders = await db.Order.findAll({
-            attributes: ['status', 'totalAmount']
+            attributes: ['status', 'totalAmount'],
+            raw: true,
+            nest: true
         });
 
         const summary = {
@@ -513,7 +527,9 @@ export const updateOrderStatus = async (req, res) => {
                     as: 'OrderDetails'
                 }
             ],
-            transaction
+            transaction,
+            raw: true,
+            nest: true
         });
 
         if (!order) {
@@ -556,11 +572,15 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         // Cập nhật status và note
-        order.status = newStatus;
+        const updateData = { status: newStatus };
         if (note) {
-            order.note = note;
+            updateData.note = note;
         }
-        await order.save({ transaction });
+        
+        await db.Order.update(updateData, {
+            where: { id: orderId },
+            transaction
+        });
 
         await transaction.commit();
 
@@ -578,7 +598,9 @@ export const updateOrderStatus = async (req, res) => {
                         }
                     ]
                 }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -619,18 +641,26 @@ export const updatePaymentStatus = async (req, res) => {
             });
         }
 
-        const order = await db.Order.findByPk(orderId, { transaction });
+        const order = await db.Order.findByPk(orderId, { 
+            transaction,
+            raw: true,
+            nest: true
+        });
         if (!order) {
             await transaction.rollback();
             return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
         }
 
         // Update paymentStatus and optionally transactionId and note
-        order.paymentStatus = paymentStatus;
-        if (transactionId !== undefined) order.transactionId = transactionId;
-        if (note) order.note = note;
+        const updateData = { paymentStatus: paymentStatus };
+        if (transactionId !== undefined) updateData.transactionId = transactionId;
+        if (note) updateData.note = note;
 
-        await order.save({ transaction });
+        await db.Order.update(updateData, {
+            where: { id: orderId },
+            transaction
+        });
+
         await transaction.commit();
 
         // Return updated order (fresh)
@@ -639,7 +669,9 @@ export const updatePaymentStatus = async (req, res) => {
                 { model: db.OrderDetail, as: 'OrderDetails', include: [{ model: db.Product, as: 'product', attributes: ['id', 'title', 'image'] }] },
                 { model: db.User, as: 'user', attributes: ['id', 'fullName', 'email', 'phone'] },
                 { model: db.Discount, as: 'discount' }
-            ]
+            ],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({ success: true, message: 'Cập nhật trạng thái thanh toán thành công', data: { order: updated } });
@@ -665,7 +697,10 @@ export const getMyOrders = async (req, res) => {
         const paymentStatus = req.query.paymentStatus; // Filter theo paymentStatus
 
         // Lấy thông tin user để query theo phone/email nếu cần
-        const user = await db.User.findByPk(userId);
+        const user = await db.User.findByPk(userId, {
+            raw: true,
+            nest: true
+        });
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -713,19 +748,16 @@ export const getMyOrders = async (req, res) => {
             ],
             limit: limit,
             offset: offset,
-            order: [['createdAt', 'DESC']]
-        });
-
-        // Format lại data để frontend dễ xử lý
-        const formattedOrders = orders.map(order => {
-            return order.toJSON();
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
             success: true,
             message: 'Lấy danh sách đơn hàng thành công',
             data: {
-                orders: formattedOrders,
+                orders: orders,
                 pagination: {
                     currentPage: page,
                     totalPages: Math.ceil(totalOrders / limit),

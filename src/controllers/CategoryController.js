@@ -8,7 +8,9 @@ export const getAllCategories = async (req, res) => {
     try {
         const categories = await db.ProductCategory.findAll({
             attributes: ['id', 'title', 'alias', 'icon', 'createdAt', 'updatedAt'],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,
+            nest: true
         });
 
         return res.status(200).json({
@@ -49,7 +51,9 @@ export const createCategory = async (req, res) => {
         // Kiểm tra alias đã tồn tại chưa
         if (alias) {
             const existingCategory = await db.ProductCategory.findOne({
-                where: { alias: alias }
+                where: { alias: alias },
+                raw: true,
+                nest: true
             });
 
             if (existingCategory) {
@@ -103,7 +107,10 @@ export const updateCategory = async (req, res) => {
         }
 
         // Kiểm tra danh mục có tồn tại không
-        const category = await db.ProductCategory.findByPk(categoryId);
+        const category = await db.ProductCategory.findByPk(categoryId, {
+            raw: true,
+            nest: true
+        });
 
         if (!category) {
             return res.status(404).json({
@@ -115,7 +122,9 @@ export const updateCategory = async (req, res) => {
         // Kiểm tra alias mới có bị trùng không (trừ chính category này)
         if (alias) {
             const existingCategory = await db.ProductCategory.findOne({
-                where: { alias: alias }
+                where: { alias: alias },
+                raw: true,
+                nest: true
             });
 
             if (existingCategory && existingCategory.id !== parseInt(categoryId)) {
@@ -138,7 +147,10 @@ export const updateCategory = async (req, res) => {
         });
 
         // Lấy lại category sau khi update
-        const updatedCategory = await db.ProductCategory.findByPk(categoryId);
+        const updatedCategory = await db.ProductCategory.findByPk(categoryId, {
+            raw: true,
+            nest: true
+        });
 
         return res.status(200).json({
             success: true,
@@ -167,7 +179,10 @@ export const deleteCategory = async (req, res) => {
         const categoryId = req.params.id;
 
         // Kiểm tra danh mục có tồn tại không
-        const category = await db.ProductCategory.findByPk(categoryId);
+        const category = await db.ProductCategory.findByPk(categoryId, {
+            raw: true,
+            nest: true
+        });
 
         if (!category) {
             return res.status(404).json({

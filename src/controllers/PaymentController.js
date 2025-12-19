@@ -11,7 +11,7 @@ const VNPAY_CONFIG = {
     vnp_TmnCode: 'HCMRE7OM', // Mã website tại VNPAY (lấy từ sandbox)
     vnp_HashSecret: '7B62KFHKN653HAESIV1Z6CPYJPCOZH9X', // Chuỗi bí mật (lấy từ sandbox)
     vnp_Url: 'https://sandbox.vnpayment.vn/paymentv2/vpcpay.html', // URL thanh toán sandbox
-    vnp_ReturnUrl: 'http://localhost:3000/api/payment/vnpay-return' // URL callback về backend
+    vnp_ReturnUrl: 'https://be-qlda.onrender.com/api/payment/vnpay-return' // URL callback về backend
 };
 
 /**
@@ -32,8 +32,8 @@ const MOMO_CONFIG = {
     accessKey: 'F8BBA842ECF85',
     secretKey: 'K951B6PE1waDMi640xX08PD3vg6EkVlz',
     endpoint: 'https://test-payment.momo.vn/v2/gateway/api/create',
-    redirectUrl: 'http://localhost:3000/api/payment/momo-return',
-    ipnUrl: 'http://localhost:3000/api/payment/momo-ipn'
+    redirectUrl: 'https://be-qlda.onrender.com/api/payment/momo-return',
+    ipnUrl: 'https://be-qlda.onrender.com/api/payment/momo-ipn'
 };
 
 /**
@@ -215,7 +215,10 @@ export const vnpayReturn = async (req, res) => {
         const db = (await import('../models/index.js')).default;
 
         // Tìm order
-        const order = await db.Order.findByPk(orderId);
+        const order = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
         if (!order) {
             return res.status(404).json({
                 success: false,
@@ -226,14 +229,15 @@ export const vnpayReturn = async (req, res) => {
         // Cập nhật trạng thái thanh toán
         if (responseCode === '00') {
             // Thanh toán thành công
-            // Nếu order được tạo với reserveOnly = true, thực hiện trừ tồn kho bây giờ
             const db = (await import('../models/index.js')).default;
             const t = await db.sequelize.transaction();
             try {
                 // Reload order with details inside transaction
                 const orderForUpdate = await db.Order.findByPk(orderId, {
                     include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
-                    transaction: t
+                    transaction: t,
+                    raw: true,
+                    nest: true
                 });
 
                 if (!orderForUpdate) {
@@ -263,7 +267,7 @@ export const vnpayReturn = async (req, res) => {
                 await t.commit();
 
                 // Redirect về frontend với trạng thái thành công
-                return res.redirect(`http://localhost:5173/order-success?orderId=${orderId}`);
+                return res.redirect(`https://fe-qlda1.onrender.com/order-success?orderId=${orderId}`);
             } catch (err) {
                 await t.rollback();
                 console.error('VNPAY return commit error:', err);
@@ -275,7 +279,7 @@ export const vnpayReturn = async (req, res) => {
             await order.save();
 
             // Redirect về frontend với trạng thái thất bại
-            return res.redirect(`http://localhost:5173/order-failed?orderId=${orderId}&code=${responseCode}`);
+            return res.redirect(`https://fe-qlda1.onrender.com/order-failed?orderId=${orderId}&code=${responseCode}`);
         }
 
     } catch (error) {
@@ -324,7 +328,10 @@ export const vnpayIPN = async (req, res) => {
         const transactionId = vnp_Params['vnp_TransactionNo'];
 
         const db = (await import('../models/index.js')).default;
-        const order = await db.Order.findByPk(orderId);
+        const order = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
 
         if (!order) {
             return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
@@ -342,7 +349,9 @@ export const vnpayIPN = async (req, res) => {
             try {
                 const orderForUpdate = await db.Order.findByPk(orderId, {
                     include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
-                    transaction: t
+                    transaction: t,
+                    raw: true,
+                    nest: true
                 });
 
                 if (!orderForUpdate) {
@@ -524,10 +533,13 @@ export const momoReturn = async (req, res) => {
         const { orderId, resultCode, transId, message } = req.query;
 
         const db = (await import('../models/index.js')).default;
-        const order = await db.Order.findByPk(orderId);
+        const order = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
 
         if (!order) {
-            return res.redirect(`http://localhost:5173/order-failed?message=Order not found`);
+            return res.redirect(`https://fe-qlda1.onrender.com/order-failed?message=Order not found`);
         }
 
         // resultCode = 0 là thành công
@@ -537,12 +549,14 @@ export const momoReturn = async (req, res) => {
             try {
                 const orderForUpdate = await db.Order.findByPk(orderId, {
                     include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
-                    transaction: t
+                    transaction: t,
+                    raw: true,
+                    nest: true
                 });
 
                 if (!orderForUpdate) {
                     await t.rollback();
-                    return res.redirect(`http://localhost:5173/order-failed?message=Order not found`);
+                    return res.redirect(`https://fe-qlda1.onrender.com/order-failed?message=Order not found`);
                 }
 
                 if (orderForUpdate.reserveOnly) {
@@ -563,21 +577,21 @@ export const momoReturn = async (req, res) => {
                 await orderForUpdate.save({ transaction: t });
 
                 await t.commit();
-                return res.redirect(`http://localhost:5173/order-success?orderId=${orderId}`);
+                return res.redirect(`https://fe-qlda1.onrender.com/order-success?orderId=${orderId}`);
             } catch (err) {
                 await t.rollback();
                 console.error('Momo return commit error:', err);
-                return res.redirect(`http://localhost:5173/order-failed?message=System error`);
+                return res.redirect(`https://fe-qlda1.onrender.com/order-failed?message=System error`);
             }
         } else {
             order.paymentStatus = 'failed';
             await order.save();
-            return res.redirect(`http://localhost:5173/order-failed?orderId=${orderId}&message=${message}`);
+            return res.redirect(`https://fe-qlda1.onrender.com/order-failed?orderId=${orderId}&message=${message}`);
         }
 
     } catch (error) {
         console.error('Momo return error:', error);
-        return res.redirect(`http://localhost:5173/order-failed?message=System error`);
+        return res.redirect(`https://fe-qlda1.onrender.com/order-failed?message=System error`);
     }
 };
 
@@ -593,7 +607,10 @@ export const momoIPN = async (req, res) => {
         // ...
 
         const db = (await import('../models/index.js')).default;
-        const order = await db.Order.findByPk(orderId);
+        const order = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
 
         if (!order) {
             return res.status(200).json({ resultCode: 1, message: 'Order not found' });
@@ -609,7 +626,9 @@ export const momoIPN = async (req, res) => {
             try {
                 const orderForUpdate = await db.Order.findByPk(orderId, {
                     include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
-                    transaction: t
+                    transaction: t,
+                    raw: true,
+                    nest: true
                 });
 
                 if (!orderForUpdate) {
@@ -671,7 +690,10 @@ export const getBankInfo = async (req, res) => {
         }
 
         const db = (await import('../models/index.js')).default;
-        const order = await db.Order.findByPk(orderId);
+        const order = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
 
         if (!order) {
             return res.status(404).json({
@@ -724,7 +746,10 @@ export const confirmBankTransfer = async (req, res) => {
         }
 
         const db = (await import('../models/index.js')).default;
-        const order = await db.Order.findByPk(orderId);
+        const order = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
 
         if (!order) {
             return res.status(404).json({
@@ -733,14 +758,24 @@ export const confirmBankTransfer = async (req, res) => {
             });
         }
 
-        order.paymentStatus = 'paid';
-        order.transactionId = transactionId || `BANK_${Date.now()}`;
-        await order.save();
+        await db.Order.update(
+            { 
+                paymentStatus: 'paid',
+                transactionId: transactionId || `BANK_${Date.now()}`
+            },
+            { where: { id: orderId } }
+        );
+
+        // Lấy lại order sau update
+        const updatedOrder = await db.Order.findByPk(orderId, {
+            raw: true,
+            nest: true
+        });
 
         return res.status(200).json({
             success: true,
             message: 'Xác nhận thanh toán thành công',
-            data: { order }
+            data: { order: updatedOrder }
         });
 
     } catch (error) {
@@ -776,146 +811,27 @@ export const getPaymentHistory = async (req, res) => {
 
         const { count, rows: orders } = await db.Order.findAndCountAll({
             where: whereClause,
-            include: [
-                {
-                    model: db.OrderDetail,
-                    as: 'details',
-                    include: [
-                        {
-                            model: db.Product,
-                            as: 'product',
-                            attributes: ['id', 'title', 'image']
-                        }
-                    ]
-                },
-                {
-                    model: db.Discount,
-                    as: 'discount',
-                    attributes: ['code', 'description']
-                }
-            ],
+            order: [['createdAt', 'DESC']],
             limit: limit,
             offset: offset,
-            order: [['createdAt', 'DESC']]
+            raw: true,
+            nest: true
         });
 
-        // Tính toán thống kê
-        const stats = {
-            totalOrders: count,
-            totalPaid: orders.filter(o => o.paymentStatus === 'paid').length,
-            totalPending: orders.filter(o => o.paymentStatus === 'pending').length,
-            totalFailed: orders.filter(o => o.paymentStatus === 'failed').length,
-            totalAmount: orders.reduce((sum, o) => sum + parseFloat(o.totalAmount || 0), 0)
-        };
-
+        // Trả về kết quả
         return res.status(200).json({
             success: true,
-            message: 'Lấy lịch sử thanh toán thành công',
+            message: 'Lịch sử thanh toán',
             data: {
-                orders: orders,
-                stats: stats,
-                pagination: {
-                    currentPage: page,
-                    totalPages: Math.ceil(count / limit),
-                    totalOrders: count,
-                    limit: limit
-                }
+                total: count,
+                page: page,
+                pageSize: limit,
+                orders: orders
             }
         });
 
     } catch (error) {
         console.error('Get payment history error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy lịch sử thanh toán',
-            error: error.message
-        });
-    }
-};
-
-/**
- * GET /api/payment/history/admin (Admin only)
- * Admin xem toàn bộ lịch sử thanh toán
- */
-export const getAdminPaymentHistory = async (req, res) => {
-    try {
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 20;
-        const offset = (page - 1) * limit;
-        const paymentStatus = req.query.paymentStatus;
-        const typePayment = req.query.typePayment;
-
-        const db = (await import('../models/index.js')).default;
-
-        const whereClause = {};
-        if (paymentStatus) whereClause.paymentStatus = paymentStatus;
-        if (typePayment) whereClause.typePayment = parseInt(typePayment);
-
-        const { count, rows: orders } = await db.Order.findAndCountAll({
-            where: whereClause,
-            include: [
-                {
-                    model: db.User,
-                    as: 'user',
-                    attributes: ['id', 'userName', 'email', 'phone']
-                },
-                {
-                    model: db.OrderDetail,
-                    as: 'details',
-                    include: [
-                        {
-                            model: db.Product,
-                            as: 'product',
-                            attributes: ['id', 'title']
-                        }
-                    ]
-                },
-                {
-                    model: db.Discount,
-                    as: 'discount',
-                    attributes: ['code']
-                }
-            ],
-            limit: limit,
-            offset: offset,
-            order: [['createdAt', 'DESC']]
-        });
-
-        // Thống kê tổng quan
-        const allOrders = await db.Order.findAll({
-            attributes: [
-                [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'totalOrders'],
-                [db.sequelize.fn('SUM', db.sequelize.col('totalAmount')), 'totalRevenue']
-            ],
-            where: { paymentStatus: 'paid' },
-            raw: true
-        });
-
-        const stats = {
-            totalOrders: count,
-            totalPaidOrders: allOrders[0]?.totalOrders || 0,
-            totalRevenue: parseFloat(allOrders[0]?.totalRevenue || 0),
-            pendingOrders: orders.filter(o => o.paymentStatus === 'pending').length,
-            failedOrders: orders.filter(o => o.paymentStatus === 'failed').length
-        };
-
-        return res.status(200).json({
-            success: true,
-            message: 'Lấy lịch sử thanh toán thành công',
-            data: {
-                orders: orders,
-                stats: stats,
-                pagination: {
-                    currentPage: page,
-                    totalPages: Math.ceil(count / limit),
-                    totalOrders: count,
-                    limit: limit
-                }
-            }
-        });
-
-    } catch (error) {
-        console.error('Get admin payment history error:', error);
         return res.status(500).json({
             success: false,
             message: 'Lỗi khi lấy lịch sử thanh toán',
