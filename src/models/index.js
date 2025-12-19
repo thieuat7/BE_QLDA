@@ -1,32 +1,23 @@
 import { Sequelize, DataTypes } from 'sequelize';
-// Bỏ readFileSync và path vì không cần đọc file thủ công nữa
-import configData from '../config/config.js'; // Import trực tiếp file config.js
+import configData from '../config/config.js';
 
 const env = process.env.NODE_ENV || 'development';
-
-// Lấy cấu hình tương ứng với môi trường hiện tại
 const config = configData[env];
-
-// Khởi tạo biến db
 const db = {};
 
 let sequelize;
-
-// Khởi tạo kết nối Sequelize dựa trên config
 if (config.use_env_variable) {
   sequelize = new Sequelize(process.env[config.use_env_variable], config);
 } else {
   sequelize = new Sequelize(config.database, config.username, config.password, config);
 }
 
-// Test connection (Kiểm tra kết nối)
+// Test connection
 try {
   await sequelize.authenticate();
   console.log('✓ Database connection established successfully');
 } catch (error) {
   console.error('✗ Unable to connect to database:', error.message);
-  // Log chi tiết lỗi kết nối để debug trên Render
-  console.error(error); 
 }
 
 db.sequelize = sequelize;
@@ -137,21 +128,26 @@ db.Discount = sequelize.define('Discount', {
 
 // --- THIẾT LẬP MỐI QUAN HỆ (ASSOCIATIONS) ---
 
-// Product associations
+// Product & Category
 db.Product.belongsTo(db.ProductCategory, { foreignKey: 'productCategoryId', as: 'category' });
+db.ProductCategory.hasMany(db.Product, { foreignKey: 'productCategoryId', as: 'products' });
+
+// Product & Images
 db.Product.hasMany(db.ProductImage, { foreignKey: 'productId', as: 'images' });
 db.ProductImage.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
-// Cart associations
+// Cart
 db.Cart.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
 db.Cart.hasMany(db.CartItem, { foreignKey: 'cartId', as: 'items' });
 db.CartItem.belongsTo(db.Cart, { foreignKey: 'cartId', as: 'cart' });
 db.CartItem.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
-// Order associations
+// Order & Details
 db.Order.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
 db.Order.belongsTo(db.Discount, { foreignKey: 'discountId', as: 'discount' });
-db.Order.hasMany(db.OrderDetail, { foreignKey: 'OrderDetails', as: 'OrderDetails' }); // Chú ý: Alias nên thống nhất
+
+// SỬA LỖI Ở ĐÂY: foreignKey phải là 'orderId', không phải 'OrderDetails'
+db.Order.hasMany(db.OrderDetail, { foreignKey: 'orderId', as: 'OrderDetails' }); 
 db.OrderDetail.belongsTo(db.Order, { foreignKey: 'orderId', as: 'order' });
 db.OrderDetail.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
