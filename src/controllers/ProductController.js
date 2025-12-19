@@ -45,8 +45,10 @@ export const getAllProducts = async (req, res) => {
             limit: limit,
             offset: offset,
             order: orderClause,
-            distinct: true, // QUAN TRỌNG: Giúp đếm chính xác trên Postgres khi có include
-            // raw: true,   <-- TUYỆT ĐỐI KHÔNG DÙNG DÒNG NÀY KHI CÓ INCLUDE VÀ LIMIT
+            
+            // --- CẤU HÌNH QUAN TRỌNG ĐỂ SỬA LỖI TRÊN RENDER ---
+            distinct: true,   // Đếm chính xác số sản phẩm (tránh đếm dòng join)
+            subQuery: false,  // Tắt subQuery để Sequelize không tách query (Sửa lỗi result.get is not a function)
         });
 
         return res.status(200).json({
