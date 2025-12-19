@@ -1,3 +1,78 @@
+import db from '../models/index.js';
+import { Op } from 'sequelize';
+
+/**
+ * GET /api/products
+ * Lấy danh sách sản phẩm (Public)
+ * Query params: page, limit, category_id, sort (price_asc, price_desc)
+ */
+export const getAllProducts = async (req, res) => {
+    try {
+        // Pagination
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 12;
+        const offset = (page - 1) * limit;
+
+        // Filter và sort
+        const categoryId = req.query.category_id;
+        const sort = req.query.sort; // price_asc, price_desc
+
+        // Build where clause
+        const whereClause = { isActive: true };
+        if (categoryId) {
+            whereClause.productCategoryId = categoryId;
+        }
+
+        // Build order clause
+        let orderClause = [['createdAt', 'DESC']];
+        if (sort === 'price_asc') {
+            orderClause = [['price', 'ASC']];
+        } else if (sort === 'price_desc') {
+            orderClause = [['price', 'DESC']];
+        }
+
+        // Query
+        const { count, rows: products } = await db.Product.findAndCountAll({
+            where: whereClause,
+            attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
+            include: [
+                {
+                    model: db.ProductCategory,
+                    as: 'category',
+                    attributes: ['id', 'title', 'alias']
+                }
+            ],
+            limit: limit,
+            offset: offset,
+            order: orderClause,
+            distinct: true, // QUAN TRỌNG: Giúp đếm chính xác trên Postgres khi có include
+            // raw: true,   <-- TUYỆT ĐỐI KHÔNG DÙNG DÒNG NÀY KHI CÓ INCLUDE VÀ LIMIT
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: 'Lấy danh sách sản phẩm thành công',
+            data: {
+                products: products,
+                pagination: {
+                    currentPage: page,
+                    totalPages: Math.ceil(count / limit),
+                    totalProducts: count,
+                    limit: limit
+                }
+            }
+        });
+
+    } catch (error) {
+        console.error('Get products error:', error);
+        return res.status(500).json({
+            success: false,
+            message: 'Lỗi khi lấy danh sách sản phẩm',
+            error: error.message
+        });
+    }
+};
+
 /**
  * GET /api/products/sale
  * Lấy danh sách sản phẩm đang sale (isSale = true, dùng priceSale)
@@ -67,78 +142,6 @@ export const getHotProducts = async (req, res) => {
         return res.status(500).json({
             success: false,
             message: 'Lỗi khi lấy sản phẩm hot',
-            error: error.message
-        });
-    }
-};
-import db from '../models/index.js';
-import { Op } from 'sequelize';
-
-/**
- * GET /api/products
- * Lấy danh sách sản phẩm (Public)
- * Query params: page, limit, category_id, sort (price_asc, price_desc)
- */
-export const getAllProducts = async (req, res) => {
-    try {
-        // Pagination
-        const page = parseInt(req.query.page) || 1;
-        const limit = parseInt(req.query.limit) || 12;
-        const offset = (page - 1) * limit;
-
-        // Filter và sort
-        const categoryId = req.query.category_id;
-        const sort = req.query.sort; // price_asc, price_desc
-
-        // Build where clause
-        const whereClause = { isActive: true };
-        if (categoryId) {
-            whereClause.productCategoryId = categoryId;
-        }
-
-        // Build order clause
-        let orderClause = [['createdAt', 'DESC']];
-        if (sort === 'price_asc') {
-            orderClause = [['price', 'ASC']];
-        } else if (sort === 'price_desc') {
-            orderClause = [['price', 'DESC']];
-        }
-
-        // Query
-        const { count, rows: products } = await db.Product.findAndCountAll({
-            where: whereClause,
-            attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
-            include: [
-                {
-                    model: db.ProductCategory,
-                    as: 'category',
-                    attributes: ['id', 'title', 'alias']
-                }
-            ],
-            limit: limit,
-            offset: offset,
-            order: orderClause
-        });
-
-        return res.status(200).json({
-            success: true,
-            message: 'Lấy danh sách sản phẩm thành công',
-            data: {
-                products: products,
-                pagination: {
-                    currentPage: page,
-                    totalPages: Math.ceil(count / limit),
-                    totalProducts: count,
-                    limit: limit
-                }
-            }
-        });
-
-    } catch (error) {
-        console.error('Get products error:', error);
-        return res.status(500).json({
-            success: false,
-            message: 'Lỗi khi lấy danh sách sản phẩm',
             error: error.message
         });
     }
