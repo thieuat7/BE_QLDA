@@ -5,7 +5,7 @@ const testLogin = async () => {
         console.log('🔄 Testing Login API...\n');
 
         // Test với tài khoản admin
-        const response = await fetch('http://localhost:3000/api/auth/login', {
+        const response = await fetch('https://be-qlda.onrender.com/api/auth/login', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

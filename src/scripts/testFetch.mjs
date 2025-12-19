@@ -2,7 +2,7 @@ import axios from 'axios';
 
 (async () => {
     try {
-        const res = await axios.get('http://localhost:3000/api/tin-tuc', { timeout: 5000 });
+        const res = await axios.get('https://be-qlda.onrender.com/api/tin-tuc', { timeout: 5000 });
         console.log('STATUS', res.status);
         console.log('DATA', JSON.stringify(res.data, null, 2));
     } catch (err) {

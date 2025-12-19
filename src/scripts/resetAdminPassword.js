@@ -39,7 +39,7 @@ const resetAdminPassword = async () => {
         console.log('🎭 Role:', admin.role);
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('\n💡 Bây giờ bạn có thể đăng nhập với:');
-        console.log(`   POST http://localhost:3000/api/auth/login`);
+        console.log(`   POST https://be-qlda.onrender.com/api/auth/login`);
         console.log(`   Body: { "email": "${adminEmail}", "password": "${newPassword}" }`);
 
     } catch (error) {
