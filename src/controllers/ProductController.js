@@ -8,22 +8,18 @@ import { Op } from 'sequelize';
  */
 export const getAllProducts = async (req, res) => {
     try {
-        // Pagination
         const page = parseInt(req.query.page) || 1;
         const limit = parseInt(req.query.limit) || 12;
         const offset = (page - 1) * limit;
 
-        // Filter và sort
         const categoryId = req.query.category_id;
         const sort = req.query.sort;
 
-        // Build where clause
         const whereClause = { isActive: true };
         if (categoryId) {
             whereClause.productCategoryId = categoryId;
         }
 
-        // Build order clause
         let orderClause = [['createdAt', 'DESC']];
         if (sort === 'price_asc') {
             orderClause = [['price', 'ASC']];
@@ -31,14 +27,9 @@ export const getAllProducts = async (req, res) => {
             orderClause = [['price', 'DESC']];
         }
 
-        // --- FIX: Tách query count và query data ---
+        // Tách count và findAll
+        const count = await db.Product.count({ where: whereClause });
         
-        // 1. Đếm tổng số sản phẩm (không include, không limit)
-        const count = await db.Product.count({
-            where: whereClause
-        });
-
-        // 2. Lấy danh sách sản phẩm
         const products = await db.Product.findAll({
             where: whereClause,
             attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
@@ -46,14 +37,12 @@ export const getAllProducts = async (req, res) => {
                 {
                     model: db.ProductCategory,
                     as: 'category',
-                    attributes: ['id', 'title', 'alias'],
-                    required: false  // LEFT JOIN thay vì INNER JOIN
+                    attributes: ['id', 'title', 'alias']
                 }
             ],
             limit: limit,
             offset: offset,
-            order: orderClause,
-            subQuery: false  // Quan trọng: tránh subquery phức tạp
+            order: orderClause
         });
 
         return res.status(200).json({
@@ -79,7 +68,6 @@ export const getAllProducts = async (req, res) => {
         });
     }
 };
-
 /**
  * GET /api/products/sale
  * Lấy danh sách sản phẩm đang sale (isSale = true, dùng priceSale)
