@@ -171,7 +171,7 @@ export const getAllPaymentHistory = async (req, res) => {
 
 /**
  * GET /api/payment-history/admin/:id
- * [ADMIN] Lấy chi tiết một đơn hàng (Hàm quan trọng để fix lỗi crash server)
+ * [ADMIN] Lấy chi tiết một đơn hàng
  */
 export const getAdminOrderDetail = async (req, res) => {
     try {
@@ -194,7 +194,6 @@ export const getAdminOrderDetail = async (req, res) => {
 
         const order = orderInstance.get({ plain: true });
         
-        // Format lại dữ liệu cho đẹp trước khi gửi về client
         const formattedOrder = {
             ...order,
             paymentMethodName: getPaymentMethodName(order.typePayment),
@@ -208,6 +207,63 @@ export const getAdminOrderDetail = async (req, res) => {
         return res.status(200).json({ success: true, data: formattedOrder });
     } catch (error) {
         console.error('Error in getAdminOrderDetail:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * GET /api/payment-history/statistics
+ * [ADMIN] Thống kê doanh thu và đơn hàng
+ */
+export const getPaymentStatistics = async (req, res) => {
+    try {
+        const totalRevenue = await db.Order.sum('totalAmount', { where: { paymentStatus: 'paid' } });
+        const totalOrders = await db.Order.count();
+
+        const statusStats = await db.Order.findAll({
+            attributes: ['status', [db.sequelize.fn('COUNT', db.sequelize.col('id')), 'count']],
+            group: ['status'],
+            raw: true
+        });
+
+        return res.status(200).json({
+            success: true,
+            data: {
+                totalRevenue: parseFloat(totalRevenue || 0),
+                totalOrders,
+                orderStatusBreakdown: statusStats
+            }
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+/**
+ * GET /api/payment-history/detail/:id
+ * [USER] Lấy chi tiết đơn hàng cá nhân
+ */
+export const getUserOrderDetail = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const userId = req.user.id;
+
+        const orderInstance = await db.Order.findOne({
+            where: { id, userId },
+            include: [
+                { 
+                    model: db.OrderDetail, 
+                    as: 'OrderDetails',
+                    include: [{ model: db.Product, as: 'product' }]
+                },
+                { model: db.Discount, as: 'discount' }
+            ]
+        });
+
+        if (!orderInstance) return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+
+        return res.status(200).json({ success: true, data: orderInstance.get({ plain: true }) });
+    } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
     }
 };
