@@ -1,30 +1,30 @@
-import mysql from 'mysql2/promise';
-import dotenv from 'dotenv';
-dotenv.config();
+import { Sequelize } from 'sequelize';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-const connectionDB = mysql.createPool({
-    host: process.env.HOST_DATA,
-    user: process.env.USER_DATA,
-    password: process.env.PASSWORD_DATA,
-    port: process.env.PORT_DATA,
-    database: process.env.DATABASE_DATA,
-    waitForConnections: true,
-    connectionLimit: 10,
-    queueLimit: 0
-});
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
-// Test kết nối database
-const connectDB = async () => {
+/**
+ * Initialize and connect to database
+ */
+export const connectDB = async () => {
     try {
-        const connection = await connectionDB.getConnection();
-        console.log('✓ Kết nối database thành công!');
-        connection.release();
+        const env = process.env.NODE_ENV || 'development';
+        const configPath = join(__dirname, '../config/config.json');
+        const configData = JSON.parse(readFileSync(configPath, 'utf8'));
+        const config = configData[env];
+
+        const sequelize = new Sequelize(config.database, config.username, config.password, config);
+
+        // Test connection
+        await sequelize.authenticate();
+        console.log('✓ Database connection established successfully');
+
         return true;
     } catch (error) {
-        console.error('✗ Không thể kết nối database:', error.message);
+        console.error('✗ Unable to connect to database:', error.message);
         return false;
     }
 };
-
-export { connectionDB, connectDB };
-export default connectionDB;
