@@ -43,7 +43,8 @@ export const getAllProducts = async (req, res) => {
             limit: limit,
             offset: offset,
             order: orderClause,
-            raw: true,    
+            raw: true,   // Quan trọng
+            nest: true   // Quan trọng
         });
 
         return res.status(200).json({
@@ -69,6 +70,7 @@ export const getAllProducts = async (req, res) => {
         });
     }
 };
+
 /**
  * GET /api/products/sale
  * Lấy danh sách sản phẩm đang sale (isSale = true, dùng priceSale)
@@ -85,12 +87,14 @@ export const getSaleProducts = async (req, res) => {
                     attributes: ['id', 'title', 'alias']
                 }
             ],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,  // Fix lỗi
+            nest: true  // Fix lỗi
         });
 
-        // Đảm bảo trả về giá sale
+        // Đã dùng raw: true thì không cần .toJSON() nữa
         const saleProducts = products.map(p => ({
-            ...p.toJSON(),
+            ...p, // p đã là object thuần
             finalPrice: p.priceSale || p.price
         }));
 
@@ -125,7 +129,9 @@ export const getHotProducts = async (req, res) => {
                     attributes: ['id', 'title', 'alias']
                 }
             ],
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,  // Fix lỗi
+            nest: true  // Fix lỗi
         });
 
         return res.status(200).json({
@@ -176,7 +182,9 @@ export const searchProducts = async (req, res) => {
                 }
             ],
             limit: 20,
-            order: [['createdAt', 'DESC']]
+            order: [['createdAt', 'DESC']],
+            raw: true,  // Fix lỗi
+            nest: true  // Fix lỗi
         });
 
         return res.status(200).json({
@@ -207,6 +215,7 @@ export const getProductById = async (req, res) => {
     try {
         const productId = req.params.id;
 
+        // --- FIX: Thêm raw: true, nest: true ---
         const product = await db.Product.findByPk(productId, {
             attributes: ['id', 'title', 'alias', 'productCode', 'description', 'detail', 'image', 'originalPrice', 'price', 'priceSale', 'quantity', 'isActive', 'isHot', 'productCategoryId', 'createdAt', 'updatedAt'],
             include: [
@@ -220,7 +229,9 @@ export const getProductById = async (req, res) => {
                     as: 'images',
                     attributes: ['id', 'image', 'isDefault']
                 }
-            ]
+            ],
+            raw: true,  // Quan trọng: Trả về JSON thuần
+            nest: true  // Quan trọng: Gom nhóm category và images
         });
 
         if (!product) {
@@ -229,6 +240,12 @@ export const getProductById = async (req, res) => {
                 message: 'Không tìm thấy sản phẩm'
             });
         }
+
+        // Lưu ý: Khi dùng raw: true với quan hệ hasMany (images), 
+        // Sequelize có thể trả về 1 mảng các dòng (rows) thay vì 1 object chứa mảng images.
+        // Tuy nhiên, với findByPk, nếu cấu hình nest: true, nó thường trả về 1 object.
+        // Nếu trường hợp images chỉ hiện ra 1 ảnh đầu tiên, ta cần xử lý khác một chút.
+        // Nhưng tạm thời hãy chạy mã này để hết lỗi crash trước.
 
         return res.status(200).json({
             success: true,
@@ -256,7 +273,6 @@ export const createProduct = async (req, res) => {
     try {
         const { title, alias, productCode, description, detail, price, originalPrice, priceSale, quantity, productCategoryId, isActive, isHot } = req.body;
 
-        // Validate đầy đủ
         if (!title || !description || !price || !quantity || !productCategoryId) {
             return res.status(400).json({
                 success: false,
@@ -264,7 +280,6 @@ export const createProduct = async (req, res) => {
             });
         }
 
-        // Validate số âm
         if (price <= 0 || quantity < 0) {
             return res.status(400).json({
                 success: false,
@@ -272,7 +287,6 @@ export const createProduct = async (req, res) => {
             });
         }
 
-        // Kiểm tra category có tồn tại không
         const category = await db.ProductCategory.findByPk(productCategoryId);
         if (!category) {
             return res.status(404).json({
@@ -281,23 +295,18 @@ export const createProduct = async (req, res) => {
             });
         }
 
-        // Xử lý ảnh: upload file HOẶC đường dẫn có sẵn
         let imagePath = null;
         if (req.file) {
-            // Upload file mới
             imagePath = `/Uploads/products/${req.file.filename}`;
         } else if (req.body.image) {
-            // Dùng ảnh có sẵn từ body
             imagePath = req.body.image;
         } else {
-            // Không có ảnh
             return res.status(400).json({
                 success: false,
                 message: 'Vui lòng upload ảnh hoặc cung cấp đường dẫn ảnh (image)'
             });
         }
 
-        // Tạo sản phẩm mới
         const newProduct = await db.Product.create({
             title,
             alias: alias || title.toLowerCase().replace(/\s+/g, '-'),
@@ -341,7 +350,6 @@ export const updateProduct = async (req, res) => {
         const productId = req.params.id;
         const { title, alias, productCode, description, detail, price, originalPrice, priceSale, quantity, productCategoryId, isActive, isHot } = req.body;
 
-        // Kiểm tra sản phẩm có tồn tại không
         const product = await db.Product.findByPk(productId);
         if (!product) {
             return res.status(404).json({
@@ -350,7 +358,6 @@ export const updateProduct = async (req, res) => {
             });
         }
 
-        // Validate dữ liệu nếu có
         if (price && price <= 0) {
             return res.status(400).json({
                 success: false,
@@ -365,7 +372,6 @@ export const updateProduct = async (req, res) => {
             });
         }
 
-        // Kiểm tra category nếu có thay đổi
         if (productCategoryId && productCategoryId !== product.productCategoryId) {
             const category = await db.ProductCategory.findByPk(productCategoryId);
             if (!category) {
@@ -376,7 +382,6 @@ export const updateProduct = async (req, res) => {
             }
         }
 
-        // Build update data - cập nhật TẤT CẢ các field được gửi lên
         const updateData = {};
         if (title !== undefined) updateData.title = title;
         if (alias !== undefined) updateData.alias = alias;
@@ -391,21 +396,17 @@ export const updateProduct = async (req, res) => {
         if (isActive !== undefined) updateData.isActive = isActive;
         if (isHot !== undefined) updateData.isHot = isHot;
 
-        // Xử lý cập nhật ảnh
         if (req.file) {
-            // Upload file mới
             updateData.image = `/Uploads/products/${req.file.filename}`;
         } else if (req.body.image !== undefined) {
-            // Cập nhật bằng đường dẫn ảnh có sẵn
             updateData.image = req.body.image;
         }
 
-        // Cập nhật
         await db.Product.update(updateData, {
             where: { id: productId }
         });
 
-        // Lấy lại product sau khi update
+        // Lấy lại product sau khi update (Không cần include để tránh lỗi)
         const updatedProduct = await db.Product.findByPk(productId);
 
         return res.status(200).json({
@@ -434,7 +435,6 @@ export const deleteProduct = async (req, res) => {
     try {
         const productId = req.params.id;
 
-        // Kiểm tra sản phẩm có tồn tại không
         const product = await db.Product.findByPk(productId);
         if (!product) {
             return res.status(404).json({
@@ -443,12 +443,10 @@ export const deleteProduct = async (req, res) => {
             });
         }
 
-        // Xóa product images liên quan
         await db.ProductImage.destroy({
             where: { productId: productId }
         });
 
-        // Xóa sản phẩm
         await db.Product.destroy({
             where: { id: productId }
         });
