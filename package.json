@@ -4,7 +4,7 @@
   "main": "server.mjs",
   "type": "module",
   "scripts": {
-    "start": "node ./src/server.mjs",
+    "start": "node src/server.mjs",
     "dev": "npx nodemon src/server.mjs localhost 3000"
   },
   "keywords": [],
