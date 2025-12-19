@@ -31,8 +31,8 @@ export const connectDB = async () => {
         // TRƯỜNG HỢP 2: Chạy ở máy Local (Development)
         // Giữ nguyên logic cũ của bạn
         else {
-            console.log('💻 Detected Local environment, reading config.json...');
-            const configPath = join(__dirname, '../config/config.json');
+            console.log('💻 Detected Local environment, reading config.js...');
+            const configPath = join(__dirname, '../config/config.js');
             
             // Kiểm tra file có tồn tại không để tránh crash
             try {
@@ -40,7 +40,7 @@ export const connectDB = async () => {
                 const config = configData[env];
                 sequelize = new Sequelize(config.database, config.username, config.password, config);
             } catch (err) {
-                console.error('❌ Could not read config.json. Make sure it exists locally.');
+                console.error('❌ Could not read config.js. Make sure it exists locally.');
                 throw err;
             }
         }

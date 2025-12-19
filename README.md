@@ -6,7 +6,7 @@
 qlda_nhom10/
 ├── src/
 │   ├── config/                 # Configuration files
-│   │   ├── config.json        # Database configuration
+│   │   ├── config.js           # Database configuration
 │   │   └── passport.mjs       # Passport authentication config
 │   │
 │   ├── controllers/           # Business logic handlers

@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const env = process.env.NODE_ENV || 'development';
-const configPath = join(__dirname, '../config/config.json');
+const configPath = join(__dirname, '../config/config.js');
 const configData = JSON.parse(readFileSync(configPath, 'utf8'));
 const config = configData[env];
 

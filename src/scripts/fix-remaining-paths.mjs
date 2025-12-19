@@ -6,7 +6,7 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const configPath = join(__dirname, 'src/config/config.json');
+const configPath = join(__dirname, 'src/config/config.js');
 const configData = JSON.parse(readFileSync(configPath, 'utf8'));
 const config = configData['development'];
 
