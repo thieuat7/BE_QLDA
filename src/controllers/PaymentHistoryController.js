@@ -2,6 +2,14 @@ import db from '../models/index.js';
 import { Op } from 'sequelize';
 
 /**
+ * Helper: Chuyển đổi mã loại thanh toán sang tên hiển thị
+ */
+const getPaymentMethodName = (type) => {
+    const methods = { 1: 'COD', 2: 'VNPAY', 3: 'MoMo', 4: 'Bank Transfer' };
+    return methods[type] || 'Khác';
+};
+
+/**
  * GET /api/payment-history/user
  * Lấy lịch sử thanh toán của user đang đăng nhập
  */
@@ -38,7 +46,6 @@ export const getUserPaymentHistory = async (req, res) => {
             ];
         }
 
-        // ❌ ĐÃ XÓA raw: true ĐỂ TRÁNH LỖI .map()
         const { count, rows: ordersInstance } = await db.Order.findAndCountAll({
             where: whereCondition,
             include: [
@@ -52,10 +59,9 @@ export const getUserPaymentHistory = async (req, res) => {
             order: [['createdAt', 'DESC']],
             limit: parseInt(limit),
             offset: parseInt(offset),
-            distinct: true // Quan trọng: Đếm chính xác khi dùng include
+            distinct: true 
         });
 
-        // Chuyển instance thành object thuần và format
         const formattedOrders = ordersInstance.map(instance => {
             const order = instance.get({ plain: true });
             const total = parseFloat(order.totalAmount || 0);
@@ -67,7 +73,6 @@ export const getUserPaymentHistory = async (req, res) => {
                 discountValue: discount,
                 finalAmount: total - discount,
                 paymentMethod: getPaymentMethodName(order.typePayment),
-                // ✅ Kiểm tra an toàn trước khi map
                 items: (order.OrderDetails || []).map(detail => ({
                     productId: detail.productId,
                     productName: detail.product?.title || 'N/A',
@@ -122,7 +127,6 @@ export const getAllPaymentHistory = async (req, res) => {
             ];
         }
 
-        // ❌ ĐÃ XÓA raw: true ĐỂ TRÁNH LỖI .map()
         const { count, rows: ordersInstance } = await db.Order.findAndCountAll({
             where: whereCondition,
             include: [
@@ -165,11 +169,45 @@ export const getAllPaymentHistory = async (req, res) => {
     }
 };
 
-// Hàm bổ trợ để tránh lặp code (Helper)
-const getPaymentMethodName = (type) => {
-    const methods = { 1: 'COD', 2: 'VNPAY', 3: 'MoMo', 4: 'Bank Transfer' };
-    return methods[type] || 'Unknown';
-};
+/**
+ * GET /api/payment-history/admin/:id
+ * [ADMIN] Lấy chi tiết một đơn hàng (Hàm quan trọng để fix lỗi crash server)
+ */
+export const getAdminOrderDetail = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const orderInstance = await db.Order.findByPk(id, {
+            include: [
+                { model: db.User, as: 'user', attributes: ['id', 'fullName', 'email', 'phone'] },
+                { 
+                    model: db.OrderDetail, 
+                    as: 'OrderDetails',
+                    include: [{ model: db.Product, as: 'product', attributes: ['id', 'title', 'image', 'productCode'] }]
+                },
+                { model: db.Discount, as: 'discount' }
+            ]
+        });
 
-// Các hàm getUserOrderDetail và getPaymentStatistics cũng cần xóa raw: true 
-// và dùng .get({ plain: true }) tương tự như trên.
+        if (!orderInstance) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy đơn hàng' });
+        }
+
+        const order = orderInstance.get({ plain: true });
+        
+        // Format lại dữ liệu cho đẹp trước khi gửi về client
+        const formattedOrder = {
+            ...order,
+            paymentMethodName: getPaymentMethodName(order.typePayment),
+            items: (order.OrderDetails || []).map(d => ({
+                ...d,
+                productName: d.product?.title,
+                productImage: d.product?.image
+            }))
+        };
+
+        return res.status(200).json({ success: true, data: formattedOrder });
+    } catch (error) {
+        console.error('Error in getAdminOrderDetail:', error);
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
