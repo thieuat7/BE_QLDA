@@ -4,13 +4,14 @@ import {
     vnpayReturn,
     vnpayIPN,
     createMomoPaymentUrl,
+    momoPayment,
     momoReturn,
     momoIPN,
     getBankInfo,
     confirmBankTransfer,
     getPaymentHistory,
     getAdminPaymentHistory
-} from '../controller/PaymentController.js';
+} from '../controllers/PaymentController.js';
 import { verifyToken, checkAdmin } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -22,10 +23,10 @@ router.get('/vnpay-return', vnpayReturn);
 router.get('/vnpay-ipn', vnpayIPN);
 
 // ===== MOMO Routes =====
-router.post('/momo/create-url', createMomoPaymentUrl);  // Public cho test
-router.post('/momo', momoPayment); // Short endpoint: POST /api/payment/momo
-router.get('/momo-return', momoReturn);
-router.post('/momo-ipn', momoIPN);
+router.post('/momo/create-url', createMomoPaymentUrl);  // Tạo URL thanh toán Momo
+router.post('/momo', momoPayment);                      // Short endpoint: POST /api/payment/momo
+router.get('/momo-return', momoReturn);                 // Callback sau thanh toán thành công
+router.post('/momo-ipn', momoIPN);                      // Webhook IPN từ Momo
 
 // ===== Bank Transfer Routes =====
 router.get('/bank-info', getBankInfo);               // Public cho test

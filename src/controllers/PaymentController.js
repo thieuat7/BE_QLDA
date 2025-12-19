@@ -15,6 +15,14 @@ const VNPAY_CONFIG = {
 };
 
 /**
+ * Tạo chữ ký HMAC SHA512 cho VNPAY
+ */
+function createSignature(data, secretKey) {
+    const hmac = crypto.createHmac('sha512', secretKey);
+    return hmac.update(Buffer.from(data, 'utf-8')).digest('hex');
+}
+
+/**
  * MOMO Configuration
  * Đăng ký tài khoản test tại: https://developers.momo.vn/
  */
@@ -40,20 +48,28 @@ const BANK_CONFIG = {
 };
 
 /**
+ * Tạo chữ ký HMAC SHA256 cho Momo
+ */
+function createMomoSignature(data, secretKey) {
+    const hmac = crypto.createHmac('sha256', secretKey);
+    return hmac.update(data).digest('hex');
+}
+
+/**
  * Sắp xếp object theo key (yêu cầu của VNPAY)
  */
 function sortObject(obj) {
-    let sorted = {};
-    let str = [];
-    let key;
-    for (key in obj) {
-        if (obj.hasOwnProperty(key)) {
-            str.push(encodeURIComponent(key));
-        }
-    }
-    str.sort();
-    for (key = 0; key < str.length; key++) {
-        sorted[str[key]] = encodeURIComponent(obj[str[key]]).replace(/%20/g, "+");
+    // Make function resilient to non-plain objects (e.g., URLSearchParams)
+    // VNPAY requires keys to be plain (not encoded) and values encoded.
+    const source = obj && typeof obj === 'object' ? obj : {};
+    const keys = Object.keys(source).map(k => k);
+    keys.sort();
+    const sorted = {};
+    for (const k of keys) {
+        const rawVal = source[k] == null ? '' : source[k];
+        const encodedVal = encodeURIComponent(rawVal).replace(/%20/g, "+");
+        // Keep key unencoded per VNPAY spec
+        sorted[k] = encodedVal;
     }
     return sorted;
 }
@@ -168,14 +184,14 @@ export const vnpayReturn = async (req, res) => {
         // Sắp xếp params
         vnp_Params = sortObject(vnp_Params);
 
-        // Tạo hash data theo chuẩn VNPAY
+        // Tạo hash data theo chuẩn VNPAY: keys must be plain, values already encoded by sortObject
         let hashdata = '';
         let i = 0;
         for (let key in vnp_Params) {
             if (i == 1) {
-                hashdata += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(vnp_Params[key]);
+                hashdata += '&' + key + '=' + vnp_Params[key];
             } else {
-                hashdata += encodeURIComponent(key) + '=' + encodeURIComponent(vnp_Params[key]);
+                hashdata += key + '=' + vnp_Params[key];
                 i = 1;
             }
         }
@@ -210,12 +226,49 @@ export const vnpayReturn = async (req, res) => {
         // Cập nhật trạng thái thanh toán
         if (responseCode === '00') {
             // Thanh toán thành công
-            order.paymentStatus = 'paid';
-            order.transactionId = transactionId;
-            await order.save();
+            // Nếu order được tạo với reserveOnly = true, thực hiện trừ tồn kho bây giờ
+            const db = (await import('../models/index.js')).default;
+            const t = await db.sequelize.transaction();
+            try {
+                // Reload order with details inside transaction
+                const orderForUpdate = await db.Order.findByPk(orderId, {
+                    include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
+                    transaction: t
+                });
 
-            // Redirect về frontend với trạng thái thành công
-            return res.redirect(`http://localhost:5173/order-success?orderId=${orderId}`);
+                if (!orderForUpdate) {
+                    await t.rollback();
+                    return res.status(404).json({ success: false, message: 'Order not found' });
+                }
+
+                if (orderForUpdate.reserveOnly) {
+                    // Decrement stock for each detail
+                    if (orderForUpdate.OrderDetails && orderForUpdate.OrderDetails.length > 0) {
+                        for (const detail of orderForUpdate.OrderDetails) {
+                            await db.Product.decrement('quantity', {
+                                by: detail.quantity,
+                                where: { id: detail.productId },
+                                transaction: t
+                            });
+                        }
+                    }
+                    // mark reserveOnly false
+                    orderForUpdate.reserveOnly = false;
+                }
+
+                orderForUpdate.paymentStatus = 'paid';
+                orderForUpdate.transactionId = transactionId;
+                await orderForUpdate.save({ transaction: t });
+
+                await t.commit();
+
+                // Redirect về frontend với trạng thái thành công
+                return res.redirect(`http://localhost:5173/order-success?orderId=${orderId}`);
+            } catch (err) {
+                await t.rollback();
+                console.error('VNPAY return commit error:', err);
+                return res.status(500).json({ success: false, message: 'Error updating order after payment', error: err.message });
+            }
         } else {
             // Thanh toán thất bại
             order.paymentStatus = 'failed';
@@ -249,13 +302,14 @@ export const vnpayIPN = async (req, res) => {
         delete vnp_Params['vnp_SecureHashType'];
 
         vnp_Params = sortObject(vnp_Params);
+        // Build hashdata: keys plain, values are encoded by sortObject
         let hashdata = '';
         let i = 0;
         for (let key in vnp_Params) {
             if (i == 1) {
-                hashdata += '&' + encodeURIComponent(key) + '=' + encodeURIComponent(vnp_Params[key]);
+                hashdata += '&' + key + '=' + vnp_Params[key];
             } else {
-                hashdata += encodeURIComponent(key) + '=' + encodeURIComponent(vnp_Params[key]);
+                hashdata += key + '=' + vnp_Params[key];
                 i = 1;
             }
         }
@@ -281,12 +335,45 @@ export const vnpayIPN = async (req, res) => {
             return res.status(200).json({ RspCode: '02', Message: 'Order already confirmed' });
         }
 
-        // Cập nhật trạng thái
+        // Cập nhật trạng thái (server-to-server)
         if (responseCode === '00') {
-            order.paymentStatus = 'paid';
-            order.transactionId = transactionId;
-            await order.save();
-            return res.status(200).json({ RspCode: '00', Message: 'Success' });
+            const db = (await import('../models/index.js')).default;
+            const t = await db.sequelize.transaction();
+            try {
+                const orderForUpdate = await db.Order.findByPk(orderId, {
+                    include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
+                    transaction: t
+                });
+
+                if (!orderForUpdate) {
+                    await t.rollback();
+                    return res.status(200).json({ RspCode: '01', Message: 'Order not found' });
+                }
+
+                if (orderForUpdate.reserveOnly) {
+                    if (orderForUpdate.OrderDetails && orderForUpdate.OrderDetails.length > 0) {
+                        for (const detail of orderForUpdate.OrderDetails) {
+                            await db.Product.decrement('quantity', {
+                                by: detail.quantity,
+                                where: { id: detail.productId },
+                                transaction: t
+                            });
+                        }
+                    }
+                    orderForUpdate.reserveOnly = false;
+                }
+
+                orderForUpdate.paymentStatus = 'paid';
+                orderForUpdate.transactionId = transactionId;
+                await orderForUpdate.save({ transaction: t });
+
+                await t.commit();
+                return res.status(200).json({ RspCode: '00', Message: 'Success' });
+            } catch (err) {
+                await t.rollback();
+                console.error('VNPAY IPN commit error:', err);
+                return res.status(200).json({ RspCode: '99', Message: 'Error' });
+            }
         } else {
             order.paymentStatus = 'failed';
             await order.save();
@@ -306,7 +393,7 @@ export const momoPayment = async (req, res) => {
         const amount = (req.body.amount || '50000').toString();
         const orderInfo = req.body.orderInfo || 'pay with MoMo';
         const extraData = req.body.extraData || '';
-        const requestType = 'captureWallet';
+        const requestType = 'payWithMethod';
 
         // Dùng cấu hình từ MOMO_CONFIG (cập nhật ở đầu file)
         const { partnerCode, accessKey, secretKey, endpoint, redirectUrl, ipnUrl } = MOMO_CONFIG;
@@ -345,51 +432,59 @@ export const momoPayment = async (req, res) => {
 };
 
 /**
- * Tạo chữ ký HMAC SHA256 cho Momo
- */
-function createMomoSignature(data, secretKey) {
-    const hmac = crypto.createHmac('sha256', secretKey);
-    return hmac.update(data).digest('hex');
-}
-
-/**
  * POST /api/payment/momo/create-url
  * Tạo URL thanh toán Momo
  */
 export const createMomoPaymentUrl = async (req, res) => {
     try {
-        const { orderId, amount, orderInfo } = req.body;
+        // Debug: log incoming headers/body to help identify malformed requests
+        console.debug('createMomoPaymentUrl headers:', req.headers);
+        console.debug('createMomoPaymentUrl body:', req.body);
 
-        if (!orderId || !amount) {
+        const { orderId, amount, orderInfo } = req.body || {};
+
+        if (!orderId || typeof amount === 'undefined' || amount === null || amount === '') {
             return res.status(400).json({
                 success: false,
-                message: 'Vui lòng cung cấp orderId và amount'
+                message: 'Vui lòng cung cấp orderId và amount',
+                receivedBody: req.body
             });
         }
-
-        const requestId = `${orderId}_${Date.now()}`;
+        // Create a unique order id for MoMo to avoid duplicate-order errors
+        const momoOrderId = `${orderId}_${Date.now()}`;
+        const requestId = momoOrderId;
         const orderInfoText = orderInfo || `Thanh toan don hang ${orderId}`;
 
-        // Tạo raw signature theo format của Momo
-        const rawSignature = `accessKey=${MOMO_CONFIG.accessKey}&amount=${amount}&extraData=&ipnUrl=${MOMO_CONFIG.ipnUrl}&orderId=${orderId}&orderInfo=${orderInfoText}&partnerCode=${MOMO_CONFIG.partnerCode}&redirectUrl=${MOMO_CONFIG.redirectUrl}&requestId=${requestId}&requestType=captureWallet`;
+        // Use a simple extraData string to avoid JSON quoting issues
+        const extraDataString = `originalOrderId=${orderId}`;
+
+        // Ensure amount is a string
+        const amountStr = amount.toString();
+
+        // Tạo raw signature theo format của Momo (must match exact order expected by MoMo)
+        const rawSignature = `accessKey=${MOMO_CONFIG.accessKey}&amount=${amountStr}&extraData=${extraDataString}&ipnUrl=${MOMO_CONFIG.ipnUrl}&orderId=${momoOrderId}&orderInfo=${orderInfoText}&partnerCode=${MOMO_CONFIG.partnerCode}&redirectUrl=${MOMO_CONFIG.redirectUrl}&requestId=${requestId}&requestType=payWithMethod`;
 
         const signature = createMomoSignature(rawSignature, MOMO_CONFIG.secretKey);
 
-        // Request body gửi đến Momo
+        // Request body gửi đến Momo (send unique momoOrderId)
         const requestBody = {
             partnerCode: MOMO_CONFIG.partnerCode,
             accessKey: MOMO_CONFIG.accessKey,
             requestId: requestId,
-            amount: amount.toString(),
-            orderId: orderId.toString(),
+            amount: amountStr,
+            orderId: momoOrderId.toString(),
             orderInfo: orderInfoText,
             redirectUrl: MOMO_CONFIG.redirectUrl,
             ipnUrl: MOMO_CONFIG.ipnUrl,
-            extraData: '',
-            requestType: 'captureWallet',
+            extraData: extraDataString,
+            requestType: 'payWithMethod',
             signature: signature,
             lang: 'vi'
         };
+
+        // Debug: log rawSignature and requestBody to verify signature input
+        console.debug('MoMo rawSignature:', rawSignature);
+        console.debug('MoMo requestBody:', requestBody);
 
         // Gọi API Momo
         const response = await axios.post(MOMO_CONFIG.endpoint, requestBody);
@@ -437,10 +532,43 @@ export const momoReturn = async (req, res) => {
 
         // resultCode = 0 là thành công
         if (resultCode === '0') {
-            order.paymentStatus = 'paid';
-            order.transactionId = transId;
-            await order.save();
-            return res.redirect(`http://localhost:5173/order-success?orderId=${orderId}`);
+            const db = (await import('../models/index.js')).default;
+            const t = await db.sequelize.transaction();
+            try {
+                const orderForUpdate = await db.Order.findByPk(orderId, {
+                    include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
+                    transaction: t
+                });
+
+                if (!orderForUpdate) {
+                    await t.rollback();
+                    return res.redirect(`http://localhost:5173/order-failed?message=Order not found`);
+                }
+
+                if (orderForUpdate.reserveOnly) {
+                    if (orderForUpdate.OrderDetails && orderForUpdate.OrderDetails.length > 0) {
+                        for (const detail of orderForUpdate.OrderDetails) {
+                            await db.Product.decrement('quantity', {
+                                by: detail.quantity,
+                                where: { id: detail.productId },
+                                transaction: t
+                            });
+                        }
+                    }
+                    orderForUpdate.reserveOnly = false;
+                }
+
+                orderForUpdate.paymentStatus = 'paid';
+                orderForUpdate.transactionId = transId;
+                await orderForUpdate.save({ transaction: t });
+
+                await t.commit();
+                return res.redirect(`http://localhost:5173/order-success?orderId=${orderId}`);
+            } catch (err) {
+                await t.rollback();
+                console.error('Momo return commit error:', err);
+                return res.redirect(`http://localhost:5173/order-failed?message=System error`);
+            }
         } else {
             order.paymentStatus = 'failed';
             await order.save();
@@ -476,15 +604,48 @@ export const momoIPN = async (req, res) => {
         }
 
         if (resultCode === 0) {
-            order.paymentStatus = 'paid';
-            order.transactionId = transId;
-            await order.save();
+            const db = (await import('../models/index.js')).default;
+            const t = await db.sequelize.transaction();
+            try {
+                const orderForUpdate = await db.Order.findByPk(orderId, {
+                    include: [{ model: db.OrderDetail, as: 'OrderDetails' }],
+                    transaction: t
+                });
+
+                if (!orderForUpdate) {
+                    await t.rollback();
+                    return res.status(200).json({ resultCode: 1, message: 'Order not found' });
+                }
+
+                if (orderForUpdate.reserveOnly) {
+                    if (orderForUpdate.OrderDetails && orderForUpdate.OrderDetails.length > 0) {
+                        for (const detail of orderForUpdate.OrderDetails) {
+                            await db.Product.decrement('quantity', {
+                                by: detail.quantity,
+                                where: { id: detail.productId },
+                                transaction: t
+                            });
+                        }
+                    }
+                    orderForUpdate.reserveOnly = false;
+                }
+
+                orderForUpdate.paymentStatus = 'paid';
+                orderForUpdate.transactionId = transId;
+                await orderForUpdate.save({ transaction: t });
+
+                await t.commit();
+                return res.status(200).json({ resultCode: 0, message: 'Success' });
+            } catch (err) {
+                await t.rollback();
+                console.error('Momo IPN commit error:', err);
+                return res.status(200).json({ resultCode: 99, message: 'Error' });
+            }
         } else {
             order.paymentStatus = 'failed';
             await order.save();
+            return res.status(200).json({ resultCode: 0, message: 'Success' });
         }
-
-        return res.status(200).json({ resultCode: 0, message: 'Success' });
 
     } catch (error) {
         console.error('Momo IPN error:', error);

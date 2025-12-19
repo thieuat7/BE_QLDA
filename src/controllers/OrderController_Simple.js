@@ -6,6 +6,7 @@ import db from '../models/index.js';
  * Frontend gửi items trực tiếp từ localStorage
  */
 export const checkout = async (req, res) => {
+    console.debug('OrderController_Simple.checkout body:', req.body);
     const transaction = await db.sequelize.transaction();
 
     try {
@@ -17,7 +18,8 @@ export const checkout = async (req, res) => {
             note,
             items, // Array: [{ productId, quantity, price, size, color }]
             totalAmount,
-            typePayment
+            typePayment,
+            reserveOnly // if true, create order without decrementing stock
         } = req.body;
 
         // 1. Validate
@@ -124,7 +126,8 @@ export const checkout = async (req, res) => {
             quantity: totalQuantity,
             typePayment: typePayment || 1, // 1=COD, 2=VNPAY, 3=MOMO, 4=Bank Transfer
             status: 'pending', // pending, processing, confirmed, shipping, delivered, cancelled
-            paymentStatus: 'pending' // pending, paid, failed
+            paymentStatus: 'pending', // pending, paid, failed
+            reserveOnly: reserveOnly === true || reserveOnly === 'true' ? true : false
         }, { transaction });
 
         // 5. Tạo OrderDetails
@@ -144,11 +147,13 @@ export const checkout = async (req, res) => {
 
             orderDetails.push(detail);
 
-            // 6. Giảm số lượng tồn kho
-            await product.decrement('quantity', {
-                by: item.quantity,
-                transaction
-            });
+            // 6. Giảm số lượng tồn kho (nếu không phải reserveOnly)
+            if (!newOrder.reserveOnly) {
+                await product.decrement('quantity', {
+                    by: item.quantity,
+                    transaction
+                });
+            }
         }
 
         // Commit transaction
@@ -179,11 +184,13 @@ export const checkout = async (req, res) => {
 
     } catch (error) {
         await transaction.rollback();
-        console.error('Checkout error:', error);
+        console.error('Checkout error:', error.stack || error);
+        const isProd = process.env.NODE_ENV === 'production';
         return res.status(500).json({
             success: false,
             message: 'Lỗi khi tạo đơn hàng',
-            error: error.message
+            error: error.message,
+            ...(isProd ? {} : { stack: error.stack })
         });
     }
 };
@@ -327,8 +334,8 @@ export const cancelOrder = async (req, res) => {
             });
         }
 
-        // Hoàn lại số lượng tồn kho (sử dụng alias include `OrderDetails`)
-        if (order.OrderDetails && order.OrderDetails.length > 0) {
+        // Hoàn lại số lượng tồn kho (nếu trước đó đã trừ)
+        if (!order.reserveOnly && order.OrderDetails && order.OrderDetails.length > 0) {
             for (const detail of order.OrderDetails) {
                 await db.Product.increment('quantity', {
                     by: detail.quantity,

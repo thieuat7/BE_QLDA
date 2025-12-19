@@ -1,4 +1,4 @@
-import db from './src/models/index.js';
+import db from '../models/index.js';
 
 /**
  * Script migrate Orders.status từ INTEGER sang ENUM

@@ -212,8 +212,9 @@ export const getCurrentUser = async (req, res) => {
         // req.user được set từ verifyToken middleware
         const userId = req.user.id;
 
+        // Lấy user và đảm bảo luôn có trường role
         const user = await db.User.findByPk(userId, {
-            attributes: { exclude: ['passwordHash'] }
+            attributes: ['id', 'userName', 'email', 'fullName', 'phone', 'role', 'googleId', 'facebookId', 'avatar', 'createdAt', 'updatedAt']
         });
 
         if (!user) {
@@ -223,19 +224,21 @@ export const getCurrentUser = async (req, res) => {
             });
         }
 
+        // Chuyển user về plain object để tránh lỗi serialize
+        const plainUser = user.get ? user.get({ plain: true }) : user;
         return res.status(200).json({
             success: true,
             user: {
-                id: user.id,
-                username: user.userName,
-                email: user.email,
-                fullName: user.fullName,
-                phone: user.phone,
-                role: user.role,
-                googleId: user.googleId,
-                facebookId: user.facebookId,
-                avatar: user.avatar,
-                createdAt: user.createdAt
+                id: plainUser.id,
+                username: plainUser.userName,
+                email: plainUser.email,
+                fullName: plainUser.fullName,
+                phone: plainUser.phone,
+                role: plainUser.role, // Đảm bảo luôn trả về role
+                googleId: plainUser.googleId,
+                facebookId: plainUser.facebookId,
+                avatar: plainUser.avatar,
+                createdAt: plainUser.createdAt
             }
         });
 

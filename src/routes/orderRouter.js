@@ -1,6 +1,6 @@
 import express from 'express';
-import { checkout, getOrderById, getOrders, cancelOrder } from '../controller/OrderController_Simple.js';
-import { getMyOrders } from '../controller/OrderController.js';
+import { checkout, getOrderById, getOrders, cancelOrder } from '../controllers/OrderController_Simple.js';
+import { getMyOrders } from '../controllers/OrderController.js';
 import { verifyToken, optionalAuth } from '../middleware/authMiddleware.js';
 
 const router = express.Router();

@@ -1,5 +1,5 @@
 import express from 'express';
-import { getAllProducts, searchProducts, getProductById, createProduct, updateProduct, deleteProduct, getSaleProducts, getHotProducts } from '../controller/ProductController.js';
+import { getAllProducts, searchProducts, getProductById, createProduct, updateProduct, deleteProduct, getSaleProducts, getHotProducts } from '../controllers/ProductController.js';
 import { verifyToken, checkAdmin } from '../middleware/auth.js';
 import upload from '../middleware/upload.js';
 
