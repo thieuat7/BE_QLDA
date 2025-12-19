@@ -1,77 +1,70 @@
-import 'dotenv/config'
-import express from 'express'
-import path from 'path'
-import { fileURLToPath } from 'url'
-import InitRouter from './routes/router.js'
-import { connectDB } from './database/database.mjs' 
-import passport from './config/passport.mjs'
+import express from 'express';
+import dotenv from 'dotenv';
+import cors from 'cors'; // Khuyên dùng thư viện cors thay vì set header thủ công
+import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = path.dirname(__filename)
+// --- IMPORT QUAN TRỌNG ---
+// Import db từ models/index.js (Nơi chúng ta đã cấu hình chính xác)
+import db from './models/index.js'; 
+import InitRouter from './routes/router.js';
+// import passport from './config/passport.mjs'; // Bỏ comment nếu bạn đã setup passport
 
-const app = express()
+dotenv.config();
 
-// Middleware
-app.use(express.json())
-app.use(express.urlencoded({ extended: true }))
+// Cấu hình __dirname cho ES Modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-// Initialize Passport
-app.use(passport.initialize())
+const app = express();
+// Render sẽ cấp PORT tự động, nếu không có thì dùng 8080 (hoặc 3000)
+const port = process.env.PORT || 8080;
 
-// CORS middleware
-// (Mình giữ nguyên logic của bạn, nó sẽ cho phép Frontend gọi API)
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*'); // Sau này nên thay '*' bằng link frontend render của bạn
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.header('Access-Control-Allow-Credentials', 'true');
+// --- Middlewares ---
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
+// 1. CORS: Cho phép Frontend gọi API
+// Dùng thư viện 'cors' gọn và chuẩn hơn cách set header thủ công
+app.use(cors({
+    origin: true, // Chấp nhận mọi nguồn (Dev), hoặc điền domain frontend cụ thể
+    credentials: true, // Cho phép gửi cookie
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS']
+}));
 
-    next();
-});
+// 2. Body Parser: Đọc dữ liệu JSON và Form gửi lên
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(cookieParser());
 
-// Serve static files
-app.use('/Uploads', (req, res, next) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Cross-Origin-Resource-Policy', 'cross-origin');
-    res.header('Access-Control-Allow-Methods', 'GET');
-    next();
-}, express.static(path.join(__dirname, '../public/Uploads')))
+// 3. Passport (Nếu dùng)
+// app.use(passport.initialize());
 
-// Initialize routes
-InitRouter(app)
+// 4. Serve Static Files (Ảnh uploads)
+app.use('/Uploads', express.static(path.join(__dirname, '../public/Uploads')));
 
-// --- PHẦN QUAN TRỌNG ĐÃ SỬA ---
-// Lấy cổng từ Render cấp, nếu chạy local thì mới lấy 3000
-const PORT = process.env.PORT || 3000; 
+// --- Routes ---
+InitRouter(app);
 
+// --- Khởi động Server ---
 const startServer = async () => {
     try {
-        // Kết nối database
-        const dbInstance = await connectDB()
+        // BƯỚC QUAN TRỌNG: Kiểm tra kết nối DB thông qua Sequelize
+        await db.sequelize.authenticate();
+        console.log('✅ Database connection established successfully.');
 
-        // Kiểm tra dbInstance (vì code connectDB mình đưa trả về object sequelize hoặc null)
-        if (dbInstance) {
-            
-            // Sync database (Tùy chọn: Bỏ comment dòng dưới nếu muốn code tự tạo bảng trên Render)
-            // await dbInstance.sync({ alter: true }); 
-            // console.log('✓ Database synced successfully');
+        // Nếu DB ok thì mới bật Server lắng nghe
+        app.listen(port, () => {
+            console.log(`🚀 Server is running on port ${port}`);
+            console.log(`💻 Environment: ${process.env.NODE_ENV || 'development'}`);
+        });
 
-            app.listen(PORT, '0.0.0.0', () => { // Thêm '0.0.0.0' để chắc chắn lắng nghe mọi IP
-                console.log(`✓ Server đang chạy trên cổng: ${PORT}`)
-                console.log(`✓ Môi trường: ${process.env.NODE_ENV || 'development'}`)
-            })
-        } else {
-            console.error('✗ Không thể khởi động server do lỗi kết nối database')
-            process.exit(1)
-        }
     } catch (error) {
-        console.error('✗ Lỗi khởi động server:', error.message)
-        process.exit(1)
+        console.error('❌ Unable to connect to the database:', error.message);
+        // Log lỗi chi tiết để debug
+        console.error(error); 
+        
+        // Không exit(1) ngay để Render có thể restart hoặc giữ log
     }
-}
+};
 
-startServer()
+startServer();
