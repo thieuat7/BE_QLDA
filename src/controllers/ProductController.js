@@ -42,7 +42,8 @@ export const getAllProducts = async (req, res) => {
             ],
             limit: limit,
             offset: offset,
-            order: orderClause
+            order: orderClause,
+            raw: true,    
         });
 
         return res.status(200).json({
