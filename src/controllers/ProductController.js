@@ -15,7 +15,7 @@ export const getAllProducts = async (req, res) => {
 
         // Filter và sort
         const categoryId = req.query.category_id;
-        const sort = req.query.sort; // price_asc, price_desc
+        const sort = req.query.sort;
 
         // Build where clause
         const whereClause = { isActive: true };
@@ -31,24 +31,29 @@ export const getAllProducts = async (req, res) => {
             orderClause = [['price', 'DESC']];
         }
 
-        // Query
-        const { count, rows: products } = await db.Product.findAndCountAll({
+        // --- FIX: Tách query count và query data ---
+        
+        // 1. Đếm tổng số sản phẩm (không include, không limit)
+        const count = await db.Product.count({
+            where: whereClause
+        });
+
+        // 2. Lấy danh sách sản phẩm
+        const products = await db.Product.findAll({
             where: whereClause,
             attributes: ['id', 'title', 'alias', 'productCode', 'description', 'image', 'price', 'priceSale', 'quantity', 'isHot', 'isSale', 'productCategoryId', 'createdAt'],
             include: [
                 {
                     model: db.ProductCategory,
                     as: 'category',
-                    attributes: ['id', 'title', 'alias']
+                    attributes: ['id', 'title', 'alias'],
+                    required: false  // LEFT JOIN thay vì INNER JOIN
                 }
             ],
             limit: limit,
             offset: offset,
             order: orderClause,
-            
-            // --- CẤU HÌNH QUAN TRỌNG ĐỂ SỬA LỖI TRÊN RENDER ---
-            distinct: true,   // Đếm chính xác số sản phẩm (tránh đếm dòng join)
-            subQuery: false,  // Tắt subQuery để Sequelize không tách query (Sửa lỗi result.get is not a function)
+            subQuery: false  // Quan trọng: tránh subquery phức tạp
         });
 
         return res.status(200).json({
