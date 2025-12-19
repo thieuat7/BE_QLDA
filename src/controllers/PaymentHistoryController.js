@@ -353,7 +353,15 @@ export const getAllPaymentHistory = async (req, res) => {
             finalAmount: parseFloat(order.totalAmount) - parseFloat(order.discountValue || 0),
             quantity: order.quantity,
             typePayment: order.typePayment,
-            paymentMethod: order.typePayment === 1 ? 'COD' : order.typePayment === 2 ? 'Bank Transfer' : order.typePayment === 3 ? 'MoMo' : 'Unknown',
+            paymentMethod: order.typePayment === 1
+                ? 'COD'
+                : order.typePayment === 2
+                    ? 'VNPAY'
+                    : order.typePayment === 3
+                        ? 'MoMo'
+                        : order.typePayment === 4
+                            ? 'Bank Transfer'
+                            : 'Unknown',
             status: order.status,
             paymentStatus: order.paymentStatus,
             transactionId: order.transactionId,
@@ -538,8 +546,9 @@ export const getPaymentStatistics = async (req, res) => {
         // Thống kê theo phương thức thanh toán
         const paymentMethodStats = {
             cod: { count: 0, revenue: 0 },
-            bankTransfer: { count: 0, revenue: 0 },
-            momo: { count: 0, revenue: 0 }
+            vnpay: { count: 0, revenue: 0 },
+            momo: { count: 0, revenue: 0 },
+            bankTransfer: { count: 0, revenue: 0 }
         };
 
         orders.forEach(order => {
@@ -548,11 +557,14 @@ export const getPaymentStatistics = async (req, res) => {
                 paymentMethodStats.cod.count++;
                 paymentMethodStats.cod.revenue += revenue;
             } else if (order.typePayment === 2) {
-                paymentMethodStats.bankTransfer.count++;
-                paymentMethodStats.bankTransfer.revenue += revenue;
+                paymentMethodStats.vnpay.count++;
+                paymentMethodStats.vnpay.revenue += revenue;
             } else if (order.typePayment === 3) {
                 paymentMethodStats.momo.count++;
                 paymentMethodStats.momo.revenue += revenue;
+            } else if (order.typePayment === 4) {
+                paymentMethodStats.bankTransfer.count++;
+                paymentMethodStats.bankTransfer.revenue += revenue;
             }
         });
 

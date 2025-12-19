@@ -5,12 +5,13 @@ import db from '../models/index.js';
  * Đặt hàng - chuyển từ giỏ hàng sang đơn hàng
  */
 export const checkout = async (req, res) => {
+    console.debug('OrderController.checkout body:', req.body);
     // Bắt đầu transaction
     const transaction = await db.sequelize.transaction();
 
     try {
         const userId = req.user.id;
-        const { address, phone, customerName, paymentMethod, email, discountCode } = req.body;
+        const { address, phone, customerName, paymentMethod, email, discountCode, reserveOnly } = req.body;
 
         // 1. Validate body
         if (!address || !phone || !customerName) {
@@ -153,7 +154,8 @@ export const checkout = async (req, res) => {
             status: 1, // 1: Đang xử lý
             discountId: discount ? discount.id : null,
             discountValue: discountAmount,
-            paymentStatus: paymentMethod === 2 ? 'pending' : 'paid' // COD = paid ngay, Online = pending
+            paymentStatus: paymentMethod === 2 ? 'pending' : 'paid', // COD = paid ngay, Online = pending
+            reserveOnly: reserveOnly === true || reserveOnly === 'true' ? true : false
         }, { transaction });
 
         // 7. Chuyển các cart_items thành order_items
@@ -168,30 +170,32 @@ export const checkout = async (req, res) => {
 
         await Promise.all(orderDetailsPromises);
 
-        // 8. Trừ số lượng tồn kho trong bảng Products
-        const updateStockPromises = cart.items.map(item => {
-            return db.Product.decrement(
-                'quantity',
-                {
-                    by: item.quantity,
-                    where: { id: item.productId },
-                    transaction
-                }
-            );
-        });
+        // 8. Trừ số lượng tồn kho trong bảng Products (nếu không phải reserveOnly)
+        if (!newOrder.reserveOnly) {
+            const updateStockPromises = cart.items.map(item => {
+                return db.Product.decrement(
+                    'quantity',
+                    {
+                        by: item.quantity,
+                        where: { id: item.productId },
+                        transaction
+                    }
+                );
+            });
 
-        await Promise.all(updateStockPromises);
+            await Promise.all(updateStockPromises);
 
-        // 9. Xóa cart_items và cart của user
-        await db.CartItem.destroy({
-            where: { cartId: cart.id },
-            transaction
-        });
+            // 9. Xóa cart_items và cart của user
+            await db.CartItem.destroy({
+                where: { cartId: cart.id },
+                transaction
+            });
 
-        await db.Cart.destroy({
-            where: { id: cart.id },
-            transaction
-        });
+            await db.Cart.destroy({
+                where: { id: cart.id },
+                transaction
+            });
+        }
 
         // Commit transaction
         await transaction.commit();
@@ -235,11 +239,13 @@ export const checkout = async (req, res) => {
         // Rollback transaction nếu có lỗi
         await transaction.rollback();
 
-        console.error('Checkout error:', error);
+        console.error('Checkout error:', error.stack || error);
+        const isProd = process.env.NODE_ENV === 'production';
         return res.status(500).json({
             success: false,
             message: 'Lỗi khi đặt hàng',
-            error: error.message
+            error: error.message,
+            ...(isProd ? {} : { stack: error.stack })
         });
     }
 };

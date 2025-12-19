@@ -1,6 +1,10 @@
 import express from 'express';
 import { register, login, getCurrentUser, updateProfile, uploadAvatar as uploadAvatarController, changePassword } from '../controllers/AuthController.js';
+<<<<<<< HEAD
+import { verifyToken } from '../middleware/authMiddleware.js';
+=======
 import { verifyToken } from '../middleware/auth.js';
+>>>>>>> 60f5a7cac4137b069c286299c1d5503036aace56
 import { uploadAvatar } from '../middleware/upload.js';
 
 const router = express.Router();
