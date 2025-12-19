@@ -1,34 +1,39 @@
 import { Sequelize, DataTypes } from 'sequelize';
-import { readFileSync } from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+// Bỏ readFileSync và path vì không cần đọc file thủ công nữa
+import configData from '../config/config.js'; // Import trực tiếp file config.js
 
 const env = process.env.NODE_ENV || 'development';
-const configPath = join(__dirname, '../config/config.js');
-const configData = JSON.parse(readFileSync(configPath, 'utf8'));
+
+// Lấy cấu hình tương ứng với môi trường hiện tại
 const config = configData[env];
 
-// Initialize Sequelize
-const sequelize = new Sequelize(config.database, config.username, config.password, config);
-
-// Define models inline (simplified approach)
+// Khởi tạo biến db
 const db = {};
 
-// Test connection
+let sequelize;
+
+// Khởi tạo kết nối Sequelize dựa trên config
+if (config.use_env_variable) {
+  sequelize = new Sequelize(process.env[config.use_env_variable], config);
+} else {
+  sequelize = new Sequelize(config.database, config.username, config.password, config);
+}
+
+// Test connection (Kiểm tra kết nối)
 try {
   await sequelize.authenticate();
   console.log('✓ Database connection established successfully');
 } catch (error) {
   console.error('✗ Unable to connect to database:', error.message);
+  // Log chi tiết lỗi kết nối để debug trên Render
+  console.error(error); 
 }
 
 db.sequelize = sequelize;
 db.Sequelize = Sequelize;
 
-// Models
+// --- ĐỊNH NGHĨA CÁC MODEL ---
+
 db.Product = sequelize.define('Product', {
   title: DataTypes.STRING,
   alias: DataTypes.STRING,
@@ -130,7 +135,9 @@ db.Discount = sequelize.define('Discount', {
   isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
 });
 
-// Associations
+// --- THIẾT LẬP MỐI QUAN HỆ (ASSOCIATIONS) ---
+
+// Product associations
 db.Product.belongsTo(db.ProductCategory, { foreignKey: 'productCategoryId', as: 'category' });
 db.Product.hasMany(db.ProductImage, { foreignKey: 'productId', as: 'images' });
 db.ProductImage.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
@@ -144,7 +151,7 @@ db.CartItem.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 // Order associations
 db.Order.belongsTo(db.User, { foreignKey: 'userId', as: 'user' });
 db.Order.belongsTo(db.Discount, { foreignKey: 'discountId', as: 'discount' });
-db.Order.hasMany(db.OrderDetail, { foreignKey: 'orderId', as: 'OrderDetails' });
+db.Order.hasMany(db.OrderDetail, { foreignKey: 'OrderDetails', as: 'OrderDetails' }); // Chú ý: Alias nên thống nhất
 db.OrderDetail.belongsTo(db.Order, { foreignKey: 'orderId', as: 'order' });
 db.OrderDetail.belongsTo(db.Product, { foreignKey: 'productId', as: 'product' });
 
